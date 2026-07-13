@@ -11,7 +11,6 @@
  *   node scripts/clearings.mjs --json           the JSON contract
  *   node scripts/clearings.mjs --horizon=3      only the next 3 nights
  *   node scripts/clearings.mjs --date=2026-08-12  simulate a given day
- *   node scripts/clearings.mjs --relaxed        the "forgiving" thresholds
  *
  * Node 20+ built-ins only. No npm, no dependencies.
  * ------------------------------------------------------------------ */
@@ -24,11 +23,9 @@ const FULL_WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 
 /* ---------- args ---------- */
 function parseArgs(argv) {
-  const o = { json: false, horizon: 7, mode: "strict", date: null };
+  const o = { json: false, horizon: 7, date: null };
   for (const a of argv) {
     if (a === "--json") o.json = true;
-    else if (a === "--relaxed") o.mode = "relaxed";
-    else if (a === "--strict") o.mode = "strict";
     else if (a === "--help" || a === "-h") o.help = true;
     else if (a.startsWith("--horizon=")) {
       const n = parseInt(a.slice(10), 10);
@@ -49,15 +46,13 @@ function fail(msg) {
   process.exit(2);
 }
 
-const HELP = `clearings — is there a night worth driving to, and where?
+const HELP = `clearings — which night is worth camping for, and when to wake the kids?
 
 usage: node scripts/clearings.mjs [options]
 
   --json            emit the JSON contract (headline, best, nights)
   --horizon=N       score the next N nights (tonight = 1). default 7, max 8
   --date=YYYY-MM-DD treat this date as "today" (simulate a given day)
-  --relaxed         use the forgiving thresholds instead of strict
-  --strict          use the strict thresholds (default)
   -h, --help        this message
 
 Default output is a readable table. --json is the stable interface a
@@ -77,11 +72,12 @@ function nowEpoch(dateStr) {
 /* ---------- payload shaping (uses only core verdicts) ---------- */
 function distanceKm(loc) { return Math.round(haversine(CB.lat, CB.lng, loc.lat, loc.lng)); }
 
-function speakableWhen(c) {
+/* The day you'd camp (the evening date), spoken. */
+function campWhen(c) {
   if (c.dayLabel === "Tonight") return "tonight";
-  if (c.dayLabel === "Tomorrow") return "tomorrow night";
+  if (c.dayLabel === "Tomorrow") return "tomorrow";
   const [y, m, d] = c.date.split("-").map(Number);
-  return `${FULL_WD[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} night`;
+  return FULL_WD[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 }
 
 function moonPhrase(c) {
@@ -91,12 +87,9 @@ function moonPhrase(c) {
   return `thin moon up (${pct}%)`;
 }
 
-function shortWhy(c) {
-  const cloud = c.maxCloud <= 10 ? "Clear" : "Mostly clear";
-  const moon = c.brightMoon ? "bright moon — good for the Moon & planets"
-             : c.moonUp ? "thin moon up"
-             : "moon down";
-  return `${cloud}, ${moon}.`;
+function whyFor(c) {
+  const moon = c.moonUp ? (c.brightMoon ? "bright moon up" : "thin moon up") : "moon down";
+  return `${c.sky.label}, ${moon}.`;
 }
 
 function bestEntry(c, loc) {
@@ -105,7 +98,9 @@ function bestEntry(c, loc) {
     location: loc.slug,
     locationName: c.locName,
     verdict: verdictLabel(c.tier),
-    when: speakableWhen(c),
+    when: campWhen(c),
+    alarm: fmtTime(c.alarm, c.off),
+    viewing: { start: fmtTime(c.ws, c.off), end: fmtTime(c.we, c.off) },
     reliable: c.reliable,
     distanceKm: distanceKm(loc),
     drive: loc.note,
@@ -115,7 +110,7 @@ function bestEntry(c, loc) {
     sky: { tier: c.sky.tier, label: c.sky.label, mag: c.sky.mag },
     moon: moonPhrase(c),
     isPerseid: c.isPerseid,
-    why: shortWhy(c),
+    why: whyFor(c),
     _rank: c.tier === "prime" ? 0 : 1,
     _idx: c.nightIdx
   };
@@ -141,7 +136,9 @@ function nightLocation(c, loc, off) {
       rise: c.moonrise == null ? null : fmtTime(c.moonrise, off),
       set: c.moonset == null ? null : fmtTime(c.moonset, off)
     },
-    window: { start: fmtTime(c.ws, off), end: fmtTime(c.we, off) },
+    alarm: fmtTime(c.alarm, off),
+    darkestAt: fmtTime(c.peak, off),
+    viewing: { start: fmtTime(c.ws, off), end: fmtTime(c.we, off) },
     tempC: c.avgTemp, windKmh: c.avgWind,
     noData: c.noData
   };
@@ -149,11 +146,11 @@ function nightLocation(c, loc, off) {
 
 function headlineFor(best, horizon) {
   if (!best.length) {
-    return `No clear dark window in the next ${horizon} night${horizon > 1 ? "s" : ""}. ` +
+    return `Nothing worth camping for in the next ${horizon} night${horizon > 1 ? "s" : ""}. ` +
       `Newfoundland forecasts firm up 2–3 days out — check again tomorrow.`;
   }
   const b = best[0];
-  let h = `${b.verdict} — ${b.locationName}, ${b.when}. ${b.why}`;
+  let h = `${b.verdict} — camp ${b.locationName}, ${b.when}. Alarm ${b.alarm}, ${b.sky.label}.`;
   if (b.isPerseid) h += " ★ Perseid peak.";
   return h;
 }
@@ -184,7 +181,6 @@ function buildPayload(grid, data, opts, generatedISO) {
 
   return {
     generated: generatedISO,
-    mode: opts.mode,
     utcOffsetSeconds: off,
     headline: headlineFor(best, horizon),
     best,
@@ -201,7 +197,7 @@ const C = {
 function paint(s, code) { return TTY ? code + s + C.reset : s; }
 function verdictColor(tier) {
   return tier === "prime" ? C.brightGreen
-       : (tier === "go" || tier === "go-moon") ? C.green
+       : tier === "go" ? C.green
        : tier === "maybe" ? C.yellow
        : tier === "nodata" ? C.dim : C.red;
 }
@@ -214,23 +210,23 @@ function printHuman(payload, grid, data, unavailable) {
   const out = [];
 
   const stamp = fmtTime(Date.parse(payload.generated), off);
-  out.push(paint(`Clearings`, C.bold) + paint(`  ·  forecast as of ${stamp} NDT  ·  ${payload.mode}`, C.dim));
+  out.push(paint(`Clearings`, C.bold) + paint(`  ·  forecast as of ${stamp} NDT`, C.dim));
   out.push("");
   out.push("  " + paint(payload.headline, C.bold));
   out.push("");
 
-  // best windows
-  out.push(paint("Best windows ahead", C.gold));
+  // best nights to camp
+  out.push(paint("Best nights to camp", C.gold));
   if (!payload.best.length) {
-    out.push(paint("  none — no clear, dark, moon-friendly window in range.", C.dim));
+    out.push(paint("  none — nothing clear with a genuinely dark sky in range.", C.dim));
   } else {
     for (const b of payload.best) {
       const v = paint(padEnd(b.verdict, 6), verdictColor(b.verdict === "PRIME" ? "prime" : "go"));
       const when = padEnd(b.night, 11);
-      const where = padEnd(trunc(b.locationName, 24), 25);
-      const why = `${b.cloud}% cloud · ${b.sky.label} to mag ${b.sky.mag} · ${b.moon}`;
+      const where = padEnd(trunc(b.locationName, 22), 23);
+      const info = `⏰ ${b.alarm} · ${b.sky.label} (mag ${b.sky.mag}) · ${b.cloud}% cloud · ${b.moon}`;
       const per = b.isPerseid ? paint("  ★ Perseid", C.gold) : "";
-      out.push(`  ${v} ${when} ${where} ${paint(why, C.dim)}${per}`);
+      out.push(`  ${v} ${when} ${where} ${paint(info, C.dim)}${per}`);
     }
   }
   out.push("");
@@ -307,7 +303,7 @@ async function main() {
 
   if (!data.length) { reportTotalFailure(failed, opts, generatedISO); return; }
 
-  const grid = buildGrid(data, opts.mode, now, opts.horizon);
+  const grid = buildGrid(data, now, opts.horizon);
   const payload = buildPayload(grid, data, opts, generatedISO);
 
   if (opts.json) {

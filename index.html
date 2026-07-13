@@ -51,9 +51,6 @@
     padding:8px 13px;border-radius:2px;cursor:pointer;transition:background .18s,border-color .18s}
   button:hover{background:rgba(63,98,124,.5);border-color:var(--gold-2)}
   button:focus-visible{outline:2px solid var(--gold-1);outline-offset:2px}
-  .toggle{display:inline-flex;border:1px solid rgba(220,204,120,.35);border-radius:2px;overflow:hidden}
-  .toggle button{border:none;border-radius:0;background:transparent}
-  .toggle button.active{background:var(--forest-1);color:var(--warm-white)}
   .stamp{font-family:var(--mono);font-size:.68rem;color:var(--gold-mute);margin-left:auto}
 
   /* legend */
@@ -174,22 +171,18 @@
     <div class="wordmark">Clearings<span class="dot">.</span></div>
     <div class="tag">go / no-go for the night sky</div>
   </header>
-  <p class="sub">The next seven nights across Newfoundland's darkest spots — clear skies, dark skies, and a window the kids can actually stay up for.</p>
+  <p class="sub">The next seven nights across Newfoundland's darkest spots — which one is worth camping for, and what time to wake the kids for the darkest sky.</p>
 
   <div class="controls">
     <button id="refresh">↻ Refresh forecast</button>
-    <div class="toggle" role="group" aria-label="Strictness">
-      <button id="strict" class="active">Strict</button>
-      <button id="relaxed">Forgiving</button>
-    </div>
     <span class="stamp" id="stamp"></span>
   </div>
   <div class="legend">
-    <span><i class="swatch sw-prime"></i> Prime — clear + truly dark, no moon</span>
-    <span><i class="swatch sw-go"></i> Go — clear enough to see stars</span>
-    <span><i class="swatch sw-maybe"></i> Maybe — breaks in the cloud</span>
+    <span><i class="swatch sw-prime"></i> Prime — camp it: clear + Milky Way sky</span>
+    <span><i class="swatch sw-go"></i> Go — clear + a real dark sky</span>
+    <span><i class="swatch sw-maybe"></i> Maybe — clear but moon-washed, or iffy weather</span>
     <span><i class="swatch sw-no"></i> No — clouded / hazy / wet</span>
-    <span>☾ = moon in the sky during viewing</span>
+    <span>⏰ = alarm time (darkest moment) · ☾ = moon up then</span>
   </div>
 
   <div id="best-wrap"></div>
@@ -201,7 +194,7 @@
 
   <footer>
     <div class="perseid-note" id="perseid-foot"></div>
-    <div>A viewing window runs from nautical dusk (stars appearing) for ~3 hours. <b>Prime</b> needs full astronomical darkness with the moon down or nearly new. Around the June solstice at this latitude the sky never gets fully dark — the tool will say so.</div>
+    <div>The plan assumes you camp on-site and wake the kids for the darkest ~30 minutes of the night — that's the <b>⏰ alarm time</b>. <b>Prime</b> means clear skies and a genuine Milky Way sky (moon down, full astronomical dark); a clear but moon-washed or twilight-only night is only a <b>Maybe</b>, since it's not worth waking them for. Around the June solstice at this latitude the sky never gets fully dark — the tool will say so.</div>
     <div>Days 1–3 are reliable; 4–7 are an outlook that firms up as they approach — check back each morning. Weather from Open-Meteo; sun &amp; moon computed on-device. Spots and thresholds are approximate and easy to change — just ask.</div>
   </footer>
 </div>
@@ -218,7 +211,6 @@ import { fmtTime, WD } from "./src/astro.js";
 import { THRESHOLDS, verdictLabel, buildGrid as buildGridCore } from "./src/scoring.js";
 
 /* ---------- UI state ---------- */
-var mode="strict";
 var DATA=[];      // per-location fetched forecast
 var OFFSET=null;  // NL utc offset seconds
 var GRID=[];      // computed nights [loc][night]
@@ -226,7 +218,7 @@ var SEL=null;
 
 /* ---------- Build all (delegates scoring to the core) ---------- */
 function buildGrid(){
-  GRID=buildGridCore(DATA,mode,Date.now());
+  GRID=buildGridCore(DATA,Date.now());
 }
 
 /* ---------- Render ---------- */
@@ -234,7 +226,7 @@ function moonGlyph(f){ // simple phase description
   if(f<0.03)return"new";if(f<0.35)return"cres";if(f<0.65)return"half";if(f<0.97)return"gib";return"full";
 }
 function verdictWord(t){return verdictLabel(t);}
-function tileClass(t){return t==="prime"?"t-prime":(t==="go"||t==="go-moon")?"t-go":t==="maybe"?"t-maybe":t==="nodata"?"t-nodata":"t-no"}
+function tileClass(t){return t==="prime"?"t-prime":t==="go"?"t-go":t==="maybe"?"t-maybe":t==="nodata"?"t-nodata":"t-no"}
 // sky-tier presentation (weather-independent darkness). Milky-Way tiers glow gold; washed tiers fade to grey.
 function skyShort(t){return{"milky-way":"Milky Way","milky-way-faint":"MW · faint","starry":"Starry","bright-stars":"Bright stars","washed":"Washed out"}[t]||"";}
 function skyColor(t){return{"milky-way":"#EDE68A","milky-way-faint":"#DCCC78","starry":"#AA9972","bright-stars":"#9aa4a1","washed":"#6d7876"}[t]||"#9aa4a1";}
@@ -262,20 +254,18 @@ function renderBest(){
     if(a.reliable!==b.reliable)return a.reliable?-1:1;
     return a.nightIdx-b.nightIdx;
   });
-  var html='<div class="section-h">Best windows ahead</div>';
+  var html='<div class="section-h">Best nights to camp</div>';
   if(!gos.length){
-    html+='<p class="empty">No clear windows in the next seven nights yet. Newfoundland forecasts firm up 2–3 days out, so check back tomorrow — a Go can appear with little warning.</p>';
+    html+='<p class="empty">Nothing worth camping for in the next seven nights yet — no clear night with a genuinely dark sky. Newfoundland forecasts firm up 2–3 days out, so check back tomorrow; a night can appear with little warning.</p>';
     wrap.innerHTML=html; return;
   }
   html+='<div class="best">';
   gos.slice(0,6).forEach(function(c){
-    var moonTxt = c.brightMoon ? "bright moon — best for the Moon &amp; planets"
-                : (c.moonUp ? "thin moon up ("+Math.round(c.moonFrac*100)+"%)" : "moon down — dark skies");
-    var darkTxt = c.darkLevel==="astronomical"?"full dark":(c.darkLevel==="nautical"?"deep twilight (no full dark)":"twilight only");
-    html+='<div class="best-card'+(c.brightMoon?' moon':'')+'">'+
-      '<div class="best-when">'+c.dayLabel+'</div>'+
+    var moonTxt = c.moonUp ? ("moon up "+Math.round(c.moonFrac*100)+"%") : "moon down";
+    html+='<div class="best-card">'+
+      '<div class="best-when">'+c.dayLabel+' · ⏰ '+fmtTime(c.alarm,c.off)+'</div>'+
       '<div class="best-where">'+c.locName+'</div>'+
-      '<div class="best-why">'+c.maxCloud+'% cloud · '+darkTxt+' · '+moonTxt+'</div>'+
+      '<div class="best-why" style="color:'+skyColor(c.sky.tier)+'">'+c.sky.label+' <span style="color:#b9c3c0">· '+c.maxCloud+'% cloud · '+moonTxt+'</span></div>'+
       (c.isPerseid?'<span class="perseid-tag">★ Perseid peak</span>':'')+
     '</div>';
   });
@@ -304,10 +294,11 @@ function renderMatrix(){
     html+='<div class="cell rowlabel"><div class="nm">'+loc.name+'</div><div class="dist">'+km+' km · '+loc.note+'</div></div>';
     row.forEach(function(c,ni){
       var sel=(SEL&&SEL.li===li&&SEL.ni===ni)?" sel":"";
-      var meta = c.noData ? "outlook" : (c.maxCloud+"% ☁");
+      // worth-it nights lead with the alarm time; a "no" shows why (cloud)
+      var meta = c.noData ? "outlook" : (c.verdict==="no" ? (c.maxCloud+"% ☁") : ('⏰ '+fmtTime(c.alarm,c.off)));
       var moon = (!c.noData && c.moonUp) ? '<span class="moonbadge">☾'+Math.round(c.moonFrac*100)+'%</span>' : '';
       html+='<div class="cell tile '+tileClass(c.tier)+sel+'" tabindex="0" role="button" '+
-        'data-li="'+li+'" data-ni="'+ni+'" aria-label="'+loc.name+' '+c.dayLabel+' '+verdictWord(c.tier)+'">'+
+        'data-li="'+li+'" data-ni="'+ni+'" aria-label="'+loc.name+' '+c.dayLabel+' '+verdictWord(c.tier)+(c.noData||c.verdict==="no"?'':' alarm '+fmtTime(c.alarm,c.off))+'">'+
         moon+'<div class="verdict">'+verdictWord(c.tier)+'</div><div class="meta">'+meta+'</div>'+
         '<div class="sky" style="color:'+skyColor(c.sky.tier)+'">'+skyShort(c.sky.tier)+'</div></div>';
     });
@@ -323,21 +314,24 @@ function select(li,ni){SEL={li:li,ni:ni};render();var d=document.getElementById(
 
 function renderDetail(){
   var host=document.getElementById("detail");
-  if(!SEL){host.innerHTML='<p class="hint">Tap any night to see the hour-by-hour breakdown, moon, and darkness window.</p>';return;}
+  if(!SEL){host.innerHTML='<p class="hint">Tap any night for the alarm time, the hour-by-hour sky and weather, and the moon.</p>';return;}
   var c=GRID[SEL.li][SEL.ni], off=c.off;
   var vcol = c.tier==="prime"?"background:rgba(111,161,90,.3);color:#c7e6b4":
-             (c.tier==="go"||c.tier==="go-moon")?"background:rgba(36,88,64,.4);color:#a6d18f":
+             c.tier==="go"?"background:rgba(36,88,64,.4);color:#a6d18f":
              c.tier==="maybe"?"background:rgba(170,153,114,.3);color:var(--gold-3)":
              c.tier==="nodata"?"background:rgba(255,255,255,.05);color:#8b9591":"background:rgba(127,42,57,.25);color:#c98a92";
   var darkTxt = c.darkLevel==="astronomical"?"Astronomical dark":(c.darkLevel==="nautical"?"Nautical (deep twilight)":"Twilight only");
   var visKm = c.minVis!=null?(c.minVis/1000).toFixed(0)+" km":"—";
   var moonState = c.moonUp?("up · "+moonGlyph(c.moonFrac)+" "+Math.round(c.moonFrac*100)+"%"):("down · "+Math.round(c.moonFrac*100)+"% lit");
+  var viewMin = Math.round((c.we-c.ws)/6e4);
+  var clearBlock = !c.noData && c.maxCloud<=THRESHOLDS.cloudGo && (c.minVis==null||c.minVis>=THRESHOLDS.visGo) && c.maxPrecip<=THRESHOLDS.precipGo;
 
   var rows="";
   if(c.hours.length){
     c.hours.forEach(function(h){
-      var warn=h.cloud>THRESHOLDS[mode].cloudGo?' class="warn"':'';
-      rows+='<tr><td>'+fmtTime(h.ep,off)+'</td>'+
+      var warn=h.cloud>THRESHOLDS.cloudGo?' class="warn"':'';
+      var hl=h.inBlock?' style="background:rgba(226,197,70,.13)"':'';
+      rows+='<tr'+hl+'><td>'+(h.inBlock?'⏰ ':'')+fmtTime(h.ep,off)+'</td>'+
         '<td'+warn+'>'+Math.round(h.cloud)+'%</td>'+
         '<td>'+Math.round(h.low)+'%</td>'+
         '<td>'+(h.vis!=null?(h.vis/1000).toFixed(0):"—")+'</td>'+
@@ -350,35 +344,38 @@ function renderDetail(){
   }
 
   var rationale;
-  if(c.noData){rationale="This night sits past the dependable forecast range. It'll sharpen over the next few days.";}
+  if(c.noData){rationale="Past the dependable forecast range. The sky read (darkness, moon) holds, but the weather will firm up over the next few days.";}
   else if(c.verdict==="go"){
-    rationale = "Clear window: cloud tops out at "+c.maxCloud+"%, visibility "+visKm+", "+c.maxPrecip+"% chance of precip. "+
-      (c.tier==="prime"?"Full darkness with the moon out of the way — the nights you drive for.":
-       c.brightMoon?"A bright moon will wash out faint stars and the Milky Way, but it's a fine night for the Moon itself, planets, and the brightest stars — great for the kids.":
-       "Good for stars; darkness is "+darkTxt.toLowerCase()+".");
+    rationale = "Worth the camp: at the darkest point ("+fmtTime(c.peak,off)+"), cloud tops out at "+c.maxCloud+"%, visibility "+visKm+", "+c.maxPrecip+"% precip. Sky reaches "+c.sky.label.toLowerCase()+" (mag "+c.sky.mag+"). "+
+      (c.tier==="prime"?"Milky Way with the moon out of the way — the trip of the summer.":"A genuinely dark sky — set the alarm.");
   }
-  else if(c.verdict==="maybe"){rationale="Partly cloudy: cloud reaches "+c.maxCloud+"% in the window. You might catch clear breaks — worth watching as it updates, but not a sure thing.";}
-  else{rationale="Not worth the drive: "+c.maxCloud+"% cloud"+(c.maxLow>40?" (a lot of it low cloud / possible fog)":"")+", visibility "+visKm+", "+c.maxPrecip+"% precip.";}
+  else if(c.verdict==="maybe"){
+    rationale = clearBlock
+      ? "Clear at the darkest point, but the sky only reaches "+c.sky.label.toLowerCase()+" (mag "+c.sky.mag+") — "+(c.brightMoon?"a bright moon washes out the Milky Way":"lingering twilight keeps it from getting truly dark")+". Fine for the Moon, planets and bright stars with the kids; not a Milky Way night — probably not worth waking them."
+      : "Borderline weather: cloud reaches "+c.maxCloud+"% around the darkest point. Might clear — worth watching as it updates, not a sure thing.";
+  }
+  else{rationale="Not worth waking them: "+c.maxCloud+"% cloud"+(c.maxLow>40?" (a lot of it low cloud / possible fog)":"")+", visibility "+visKm+", "+c.maxPrecip+"% precip at the darkest point.";}
 
   host.innerHTML=
     '<div class="dcard">'+
       '<div class="dhead">'+
         '<span class="dloc">'+c.locName+'</span>'+
-        '<span class="dwhen">'+c.dateLabel+' → '+WD[(new Date(c.we+off*1000)).getUTCDay()]+' am'+(c.isPerseid?'  ·  ★ PERSEID PEAK':'')+'</span>'+
+        '<span class="dwhen">Camp '+c.dateLabel+(c.isPerseid?'  ·  ★ PERSEID PEAK':'')+'</span>'+
         '<span class="dverdict" style="'+vcol+'">'+verdictWord(c.tier)+'</span>'+
       '</div>'+
       '<div class="dfacts">'+
-        '<div class="fact"><div class="k">Viewing window</div><div class="v">'+fmtTime(c.ws,off)+' – '+fmtTime(c.we,off)+' <small>NDT</small></div></div>'+
-        '<div class="fact"><div class="k">Darkness</div><div class="v">'+darkTxt+'</div></div>'+
+        '<div class="fact"><div class="k">Set alarm</div><div class="v">⏰ '+fmtTime(c.alarm,off)+' <small>NDT · view ~'+viewMin+' min</small></div></div>'+
+        '<div class="fact"><div class="k">Darkest at</div><div class="v">'+fmtTime(c.peak,off)+' <small>NDT</small></div></div>'+
         '<div class="fact"><div class="k">Sky (best case)</div><div class="v" style="color:'+skyColor(c.sky.tier)+'">'+c.sky.label+' <small style="color:#aeb8b5">to mag '+c.sky.mag+'</small></div></div>'+
-        '<div class="fact"><div class="k">Cloud (max)</div><div class="v">'+(c.noData?"—":c.maxCloud+'%')+' <small>'+(c.noData?'':'low '+c.maxLow+'%')+'</small></div></div>'+
+        '<div class="fact"><div class="k">Darkness</div><div class="v">'+darkTxt+'</div></div>'+
+        '<div class="fact"><div class="k">Cloud (block)</div><div class="v">'+(c.noData?"—":c.maxCloud+'%')+' <small>'+(c.noData?'':'low '+c.maxLow+'%')+'</small></div></div>'+
         '<div class="fact"><div class="k">Moon</div><div class="v">'+moonState+'</div></div>'+
         '<div class="fact"><div class="k">Moonrise / set</div><div class="v" style="font-size:.9rem">'+fmtTime(c.moonrise,off)+' / '+fmtTime(c.moonset,off)+'</div></div>'+
         '<div class="fact"><div class="k">Temp / wind</div><div class="v">'+(c.avgTemp!=null?c.avgTemp+'°C':'—')+' <small>'+(c.avgWind!=null?'~'+c.avgWind+' km/h':'')+'</small></div></div>'+
       '</div>'+
       '<table class="htable"><thead><tr><th>Hour</th><th>Cloud</th><th>Low</th><th>Vis km</th><th>Sky</th><th>Temp</th><th>Wind</th></tr></thead><tbody>'+rows+'</tbody></table>'+
       '<div class="rationale">'+rationale+'</div>'+
-      '<div class="rationale" style="opacity:.72">Sky is how dark the sky itself is — Moon &amp; twilight only, weather aside — so it holds even on a clouded night. <b>mag</b> is the faintest star the naked eye could catch: ~6.5 pristine, ~5.5 faint Milky Way, ~4.5 a bright-moon night, ~2 downtown.</div>'+
+      '<div class="rationale" style="opacity:.72">The highlighted row is your ~'+viewMin+'-min viewing block (⏰ alarm '+fmtTime(c.alarm,off)+'). Sky is how dark it gets — Moon &amp; twilight only, weather aside. <b>mag</b> is the faintest star the naked eye could catch: ~6.5 pristine, ~5.5 faint Milky Way, ~4.5 a bright-moon night, ~2 downtown.</div>'+
     '</div>';
 }
 
@@ -414,13 +411,6 @@ function load(){
 
 /* ---------- Controls ---------- */
 document.getElementById("refresh").addEventListener("click",load);
-document.getElementById("strict").addEventListener("click",function(){setMode("strict");});
-document.getElementById("relaxed").addEventListener("click",function(){setMode("relaxed");});
-function setMode(m){mode=m;
-  document.getElementById("strict").classList.toggle("active",m==="strict");
-  document.getElementById("relaxed").classList.toggle("active",m==="relaxed");
-  if(DATA.length){buildGrid();render();}
-}
 
 load();
 </script>

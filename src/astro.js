@@ -12,6 +12,11 @@ import { SunCalc } from "./suncalc.js";
 export const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/* You're camped on-site and wake the kids for a short look at the darkest
+ * moment — not a long session. This is the viewing block we score the
+ * weather over and centre on peak darkness. */
+export const VIEW_MINUTES = 30;
+
 /* Broken-out local calendar/clock fields for an epoch, given NL's offset. */
 export function parts(epoch, offSec) {
   var d = new Date(epoch + offSec * 1000);
@@ -84,33 +89,21 @@ function skyReading(score) {
 /* Sky darkness at a single instant (used per-hour in the detail view). */
 export function skyAt(loc, epoch) { return skyReading(darknessScore(loc, epoch)); }
 
-/* Best-case sky darkness over a window: the DARKEST moment reached,
- * sampled every 15 minutes (used for the calendar glance — it answers
- * "how good does it get tonight?"). The window opens at nautical dusk
- * when it's still twilight, so an average would understate the peak;
- * the per-hour detail shows the full progression. Weather-independent,
- * so it's available even past the forecast horizon. */
-export function nightSky(loc, ws, we) {
-  var best = darknessScore(loc, we);
-  for (var t = ws; t < we; t += 15 * 60 * 1000) {
-    var s = darknessScore(loc, t);
-    if (s > best) best = s;
-  }
-  return skyReading(best);
-}
-
 /* ------------------------------------------------------------------ *
- * nightAstro — the viewing window, darkness level, and moon state for
- * the evening `nightIdx` days after `nowEpoch`, at one location.
+ * nightAstro — the alarm time, viewing block, darkness, and moon state
+ * for the evening `nightIdx` days after `nowEpoch`, at one location.
  *
  *  loc       {lat,lng,name}
  *  off       UTC offset seconds for that location (from the forecast)
  *  nightIdx  0 = tonight, 1 = tomorrow, ...
  *  nowEpoch  the instant treated as "now" (injectable for --date sims)
  *
- * A window runs from nautical dusk for ~3 hours (capped at next
- * nautical dawn). darkLevel is the deepest darkness the window reaches:
- * "astronomical" | "nautical" | "twilight".
+ * Model: you're camped on-site. We find the DARKEST moment of the night
+ * (twilight × moonlight) and put a 30-minute viewing block around it —
+ * that block's start is the alarm time. `sky` is the peak reading;
+ * darkLevel is how deep the sun is at the peak ("astronomical" |
+ * "nautical" | "twilight"). `nightStart`/`nightEnd` bound the dark hours
+ * (for the detail view); `ws`/`we` are the viewing block.
  * ------------------------------------------------------------------ */
 export function nightAstro(loc, off, nightIdx, nowEpoch) {
   var today = parts(nowEpoch, off);
@@ -123,17 +116,32 @@ export function nightAstro(loc, off, nightIdx, nowEpoch) {
   var te = SunCalc.getTimes(eveNoon, loc.lat, loc.lng);   // this evening
   var tm = SunCalc.getTimes(nextNoon, loc.lat, loc.lng);  // next morning
 
-  var startD = validDate(te.nauticalDusk) ? te.nauticalDusk : (validDate(te.sunset) ? new Date(te.sunset.getTime() + 90 * 6e4) : null);
-  var morningLimit = validDate(tm.nauticalDawn) ? tm.nauticalDawn : new Date(startD.getTime() + 3 * 36e5);
-  var endD = new Date(Math.min(startD.getTime() + 3 * 36e5, morningLimit.getTime()));
-  var ws = startD.getTime(), we = endD.getTime(), wm = (ws + we) / 2;
+  // The dark hours of the night: nautical dusk → next nautical dawn.
+  // (These bounds exist island-wide even at the solstice — only true
+  // astronomical dark disappears up here, not nautical twilight.)
+  var nightStart = validDate(te.nauticalDusk) ? te.nauticalDusk.getTime()
+                 : (validDate(te.sunset) ? te.sunset.getTime() + 90 * 6e4 : eveNoon.getTime() + 10 * 36e5);
+  var nightEnd = validDate(tm.nauticalDawn) ? tm.nauticalDawn.getTime() : nightStart + 8 * 36e5;
 
-  // darkness level reached during window
-  var astroExists = validDate(te.night) && validDate(tm.nightEnd);
-  var darkLevel = (astroExists && we > te.night.getTime()) ? "astronomical" :
-                  (validDate(te.nauticalDusk) ? "nautical" : "twilight");
+  // Find the DARKEST moment of the night — the twilight × moonlight peak.
+  // That's when you'd set the alarm. Search at 10-minute steps.
+  var step = 10 * 60 * 1000, peak = nightStart, best = -1;
+  for (var t = nightStart; t <= nightEnd; t += step) {
+    var s = darknessScore(loc, t);
+    if (s > best) { best = s; peak = t; }
+  }
 
-  // moon
+  // 30-minute viewing block centred on the peak, kept inside the dark hours.
+  var half = VIEW_MINUTES * 60 * 1000 / 2;
+  var ws = peak - half, we = peak + half, wm = peak;
+  if (ws < nightStart) { ws = nightStart; we = ws + VIEW_MINUTES * 60 * 1000; }
+  if (we > nightEnd)   { we = nightEnd;   ws = we - VIEW_MINUTES * 60 * 1000; }
+
+  // Darkness level reached at the peak, from how far the sun is down.
+  var sunAtPeak = SunCalc.getPosition(new Date(peak), loc.lat, loc.lng).altitude * 180 / Math.PI;
+  var darkLevel = sunAtPeak <= -18 ? "astronomical" : (sunAtPeak <= -12 ? "nautical" : "twilight");
+
+  // moon state across the block
   var ill = SunCalc.getMoonIllumination(new Date(wm));
   var moonUp = SunCalc.getMoonPosition(new Date(ws), loc.lat, loc.lng).altitude > 0 ||
                SunCalc.getMoonPosition(new Date(wm), loc.lat, loc.lng).altitude > 0 ||
@@ -152,7 +160,9 @@ export function nightAstro(loc, off, nightIdx, nowEpoch) {
     moonFrac: ill.fraction, moonUp: moonUp, brightMoon: brightMoon,
     moonrise: validDate(mt.rise) ? mt.rise.getTime() : null,
     moonset: validDate(mt.set) ? mt.set.getTime() : null,
-    darkLevel: darkLevel, ws: ws, we: we, wm: wm,
-    sky: nightSky(loc, ws, we)
+    darkLevel: darkLevel,
+    nightStart: nightStart, nightEnd: nightEnd,
+    ws: ws, we: we, wm: wm, alarm: ws, peak: peak,
+    sky: skyAt(loc, peak)
   };
 }
