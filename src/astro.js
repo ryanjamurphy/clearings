@@ -84,11 +84,19 @@ function skyReading(score) {
 /* Sky darkness at a single instant (used per-hour in the detail view). */
 export function skyAt(loc, epoch) { return skyReading(darknessScore(loc, epoch)); }
 
-/* Representative sky darkness for a whole window: sampled at start,
- * middle, and end and averaged (used for the calendar glance). Weather-
- * independent, so it's available even past the forecast horizon. */
-export function nightSky(loc, ws, wm, we) {
-  return skyReading((darknessScore(loc, ws) + darknessScore(loc, wm) + darknessScore(loc, we)) / 3);
+/* Best-case sky darkness over a window: the DARKEST moment reached,
+ * sampled every 15 minutes (used for the calendar glance — it answers
+ * "how good does it get tonight?"). The window opens at nautical dusk
+ * when it's still twilight, so an average would understate the peak;
+ * the per-hour detail shows the full progression. Weather-independent,
+ * so it's available even past the forecast horizon. */
+export function nightSky(loc, ws, we) {
+  var best = darknessScore(loc, we);
+  for (var t = ws; t < we; t += 15 * 60 * 1000) {
+    var s = darknessScore(loc, t);
+    if (s > best) best = s;
+  }
+  return skyReading(best);
 }
 
 /* ------------------------------------------------------------------ *
@@ -145,6 +153,6 @@ export function nightAstro(loc, off, nightIdx, nowEpoch) {
     moonrise: validDate(mt.rise) ? mt.rise.getTime() : null,
     moonset: validDate(mt.set) ? mt.set.getTime() : null,
     darkLevel: darkLevel, ws: ws, we: we, wm: wm,
-    sky: nightSky(loc, ws, wm, we)
+    sky: nightSky(loc, ws, we)
   };
 }
