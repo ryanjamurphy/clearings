@@ -1,0 +1,13 @@
+# Local-only, never-published files. Anything matching *.local.* stays
+# out of the public repo. PRIVATE.local.md holds personal context the
+# domain reasoning may read but must never disclose (see CLAUDE.md).
+*.local.md
+*.local.*
+PRIVATE.local.md
+
+# OS / editor noise
+.DS_Store
+*.swp
+
+# Not used (zero-dependency project), but guard against accidents
+node_modules/

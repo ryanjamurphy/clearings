@@ -2,6 +2,23 @@
 
 A go/no-go engine for stargazing in Newfoundland.
 
+## Privacy — this repo is public
+
+Everything committed here can be read by anyone. Before you commit, push, or
+publish (dashboard copy, JSON output, logs, commit messages, screenshots):
+
+- **Disclosing that this is for stargazing around Corner Brook, NL is fine.** So
+  are the dark-sky spots, coordinates, drive times, and all astronomy/scoring.
+- **Never disclose** anything more personal: the kids' exact ages or names, a
+  home address more precise than "Corner Brook", emails, phone numbers, social
+  handles, or any other individual/personal detail. Generalize when a public
+  file needs the gist (e.g. "young kids", not exact ages).
+- **Personal context for domain calibration lives in `PRIVATE.local.md`**, which
+  is `.gitignore`d. Read it when you need that context; never copy its specifics
+  into a committed or published file.
+- **Scan the diff** for names, ages, addresses, emails, handles, or precise
+  coordinates before every commit.
+
 ## The job
 
 Ryan lives in Corner Brook with two young kids. Newfoundland weather is unpredictable
