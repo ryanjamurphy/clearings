@@ -7,7 +7,7 @@
  * Pure: no network, no filesystem, no globals.
  * ------------------------------------------------------------------ */
 
-/* Corner Brook — Ryan's home; the reference point for drive distance. */
+/* Corner Brook — the home base and reference point for drive distance. */
 export const CB = { lat: 48.9517, lng: -57.9344 };
 
 /* `slug` is a stable identifier the JSON contract exposes — consumers
