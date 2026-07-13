@@ -301,7 +301,7 @@ function renderMatrix(){
     row.forEach(function(c,ni){
       var sel=(SEL&&SEL.li===li&&SEL.ni===ni)?" sel":"";
       var meta = c.noData ? "outlook" : (c.maxCloud+"% ☁");
-      var moon = (!c.noData && c.moonUp) ? '<span class="moonbadge">☾'+Math.round(c.moonFrac*100)+'</span>' : '';
+      var moon = (!c.noData && c.moonUp) ? '<span class="moonbadge">☾'+Math.round(c.moonFrac*100)+'%</span>' : '';
       html+='<div class="cell tile '+tileClass(c.tier)+sel+'" tabindex="0" role="button" '+
         'data-li="'+li+'" data-ni="'+ni+'" aria-label="'+loc.name+' '+c.dayLabel+' '+verdictWord(c.tier)+'">'+
         moon+'<div class="verdict">'+verdictWord(c.tier)+'</div><div class="meta">'+meta+'</div></div>';
