@@ -25,11 +25,11 @@ Ryan lives in Corner Brook with two young kids. Newfoundland weather is unpredic
 more than ~3 days out, so a stargazing trip can't be planned far ahead — it has to be *caught*.
 Clearings watches six dark-sky spots and answers one question:
 
-> **Is there a night in the next few days worth driving to, and where?**
+> **Is there a night in the next few days worth camping for, and where — and when do we wake the kids?**
 
-The bar is high on purpose. A marginal night means two small kids in a car for 40+ minutes and
-nothing to show for it. **False positives are the failure mode we care about**, not false negatives.
-When in doubt, don't call it a GO.
+The bar is high on purpose. A marginal night means hauling two small kids out to camp and waking
+them in the dark for nothing. **False positives are the failure mode we care about**, not false
+negatives. When in doubt, don't call it a GO. (See domain note #8 for the "camp + alarm" model.)
 
 ## Shape of the project
 
@@ -92,15 +92,22 @@ get an answer. So the payload leads with the answer and keeps the detail underne
 ```json
 {
   "generated": "2026-08-10T09:30:00Z",
-  "headline": "GO — Blow Me Down, Wednesday night. Clear, moon down.",
-  "best": [ { "night": "2026-08-12", "location": "blow-me-down", "verdict": "PRIME", ... } ],
-  "nights": [ { "date": "...", "reliable": true, "locations": [ ... ] } ]
+  "utcOffsetSeconds": -9000,
+  "headline": "PRIME — camp Blow Me Down, Wednesday. Alarm 10:53 PM, Milky Way.",
+  "best": [ { "night": "2026-08-12", "location": "blow-me-down", "verdict": "PRIME",
+             "alarm": "10:53 PM", "viewing": { "start": "...", "end": "..." },
+             "sky": { "tier": "milky-way", "label": "Milky Way", "mag": 6.5 }, ... } ],
+  "nights": [ { "date": "...", "reliable": true, "locations": [ { "alarm": "...", "darkestAt": "...", ... } ] } ]
 }
 ```
 
-- `headline` is a single speakable/notifiable sentence. If nothing qualifies, it says so plainly.
+- `headline` is a single speakable/notifiable sentence — leads with the verdict, the spot, the day
+  to camp, and the **alarm time**. If nothing qualifies, it says so plainly.
 - `best` is pre-flattened and pre-sorted — PRIME before GO, sooner before later, closer before farther.
-- `nights` is the full matrix for anything that wants it (the dashboard).
+  Each entry carries the `alarm` time, the `viewing` block, and the peak `sky` reading.
+- `nights` is the full matrix for anything that wants it (the dashboard); each location carries
+  `alarm`, `darkestAt`, `viewing`, and `sky`.
+- There is **no `mode` field** — the "strict/forgiving" toggle was removed; there is one strict bar.
 
 ## Delivery — deliberately undecided
 
@@ -196,12 +203,27 @@ The Perseid peak lands on a **new moon** — the darkest Perseids since 2021, ne
 Roughly 90–100 meteors/hour under clear dark skies, and by mid-August Newfoundland has genuine
 astronomical darkness again.
 
-### 8. The kids are young, and full darkness is late.
+### 8. The kids are young — so the model is "camp on-site and wake them," not "stay up."
 
-In July, astronomical dark doesn't arrive until ~midnight. That's a real constraint on what's
-"worth it." The viewing window we score runs from nautical dusk for ~3 hours. A bright moon isn't
-automatically a NO — it's a bad night for the Milky Way but a *great* night for the Moon and planets
-with small kids, so we score it GO and say so rather than hiding it.
+The kids are asleep by ~8–9 PM; they will never stay up to ~midnight when full darkness arrives.
+So a trip is inescapably: **camp at a spot on a given day, then wake the kids for the darkest ~30
+minutes of the night.** The core reflects this directly (`astro.js` → `nightAstro`):
+
+- We find the **darkest moment** of the night (the twilight × moonlight peak from `darknessScore`)
+  and put a **30-minute viewing block** (`VIEW_MINUTES`) around it. The block's start is the
+  **alarm time** — the one actionable number.
+- On a "fully dark all night" plateau (moon down, deep summer) the search keeps the **earliest**
+  moment, so the alarm is as early as the sky allows (kindest for young kids). When darkness peaks
+  sharply (solstice) it lands at solar midnight.
+- There is **no drive/departure math** — you're already on-site. Distance is shown only as "how far
+  to haul everyone."
+
+Because every trip now costs a woken child, the bar is high and **sky-gated** (`scoring.js`):
+**PRIME** = clear + Milky Way sky, **GO** = clear + faint Milky Way, **MAYBE** = clear but
+moon-washed / twilight-only *or* borderline weather, **NO** = clouded/fogged/wet. A merely-clear
+but moon-washed night is a MAYBE, not worth waking them. (There is no "Forgiving" mode — one strict
+bar.) The sky measure — a plain-language tier plus an approximate naked-eye limiting magnitude — is
+computed at the **peak** (darkest moment) for the calendar glance, and per-hour in the detail view.
 
 ---
 
