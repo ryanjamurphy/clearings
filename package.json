@@ -1,0 +1,8 @@
+{
+  "name": "clearings",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A go/no-go engine for stargazing in Newfoundland.",
+  "license": "MIT"
+}

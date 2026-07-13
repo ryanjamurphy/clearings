@@ -205,158 +205,34 @@
   </footer>
 </div>
 
-<script>
-/* ---------- SunCalc (c) 2011-2015 Vladimir Agafonkin, BSD 2-Clause. Inlined for offline reliability. ---------- */
-(function(){var PI=Math.PI,sin=Math.sin,cos=Math.cos,tan=Math.tan,asin=Math.asin,atan=Math.atan2,acos=Math.acos,rad=PI/180;
-var dayMs=864e5,J1970=2440588,J2000=2451545;
-function toJulian(d){return d.valueOf()/dayMs-0.5+J1970}function fromJulian(j){return new Date((j+0.5-J1970)*dayMs)}
-function toDays(d){return toJulian(d)-J2000}var e=rad*23.4397;
-function ra(l,b){return atan(sin(l)*cos(e)-tan(b)*sin(e),cos(l))}function dec(l,b){return asin(sin(b)*cos(e)+cos(b)*sin(e)*sin(l))}
-function az(H,phi,d){return atan(sin(H),cos(H)*sin(phi)-tan(d)*cos(phi))}function alt(H,phi,d){return asin(sin(phi)*sin(d)+cos(phi)*cos(d)*cos(H))}
-function sidereal(d,lw){return rad*(280.16+360.9856235*d)-lw}
-function refr(h){if(h<0)h=0;return 0.0002967/Math.tan(h+0.00312536/(h+0.08901179))}
-function sma(d){return rad*(357.5291+0.98560028*d)}
-function ecl(M){var C=rad*(1.9148*sin(M)+0.02*sin(2*M)+0.0003*sin(3*M)),P=rad*102.9372;return M+C+P+PI}
-function sunCoords(d){var M=sma(d),L=ecl(M);return{dec:dec(L,0),ra:ra(L,0)}}
-var S={};S.getPosition=function(date,lat,lng){var lw=rad*-lng,phi=rad*lat,d=toDays(date),c=sunCoords(d),H=sidereal(d,lw)-c.ra;return{azimuth:az(H,phi,c.dec),altitude:alt(H,phi,c.dec)}};
-var times=[[-0.833,'sunrise','sunset'],[-6,'dawn','dusk'],[-12,'nauticalDawn','nauticalDusk'],[-18,'nightEnd','night']];
-var J0=9e-4;function jc(d,lw){return Math.round(d-J0-lw/(2*PI))}function at(Ht,lw,n){return J0+(Ht+lw)/(2*PI)+n}
-function stj(ds,M,L){return J2000+ds+0.0053*sin(M)-0.0069*sin(2*L)}function ha(h,phi,d){return acos((sin(h)-sin(phi)*sin(d))/(cos(phi)*cos(d)))}
-function setJ(h,lw,phi,d,n,M,L){var w=ha(h,phi,d),a=at(w,lw,n);return stj(a,M,L)}
-S.getTimes=function(date,lat,lng){var lw=rad*-lng,phi=rad*lat,d=toDays(date),n=jc(d,lw),ds=at(0,lw,n),M=sma(ds),L=ecl(M),dc=dec(L,0),Jn=stj(ds,M,L),r={solarNoon:fromJulian(Jn),nadir:fromJulian(Jn-0.5)};for(var i=0;i<times.length;i++){var t=times[i],h0=t[0]*rad,Js=setJ(h0,lw,phi,dc,n,M,L),Jr=Jn-(Js-Jn);r[t[1]]=fromJulian(Jr);r[t[2]]=fromJulian(Js)}return r};
-function moonCoords(d){var L=rad*(218.316+13.176396*d),M=rad*(134.963+13.064993*d),F=rad*(93.272+13.229350*d),l=L+rad*6.289*sin(M),b=rad*5.128*sin(F),dt=385001-20905*cos(M);return{ra:ra(l,b),dec:dec(l,b),dist:dt}}
-S.getMoonPosition=function(date,lat,lng){var lw=rad*-lng,phi=rad*lat,d=toDays(date),c=moonCoords(d),H=sidereal(d,lw)-c.ra,h=alt(H,phi,c.dec);h=h+refr(h);return{azimuth:az(H,phi,c.dec),altitude:h,distance:c.dist}};
-S.getMoonIllumination=function(date){var d=toDays(date||new Date()),s=sunCoords(d),m=moonCoords(d),sd=149598000,phi=acos(sin(s.dec)*sin(m.dec)+cos(s.dec)*cos(m.dec)*cos(s.ra-m.ra)),inc=atan(sd*sin(phi),m.dist-sd*cos(phi)),ang=atan(cos(s.dec)*sin(s.ra-m.ra),sin(s.dec)*cos(m.dec)-cos(s.dec)*sin(m.dec)*cos(s.ra-m.ra));return{fraction:(1+cos(inc))/2,phase:0.5+0.5*inc*(ang<0?-1:1)/PI,angle:ang}};
-function hl(d,h){return new Date(d.valueOf()+h*dayMs/24)}
-S.getMoonTimes=function(date,lat,lng,utc){var t=new Date(date);if(utc)t.setUTCHours(0,0,0,0);else t.setHours(0,0,0,0);var hc=0.133*rad,h0=S.getMoonPosition(t,lat,lng).altitude-hc,rise,set,ye,d,x1,x2,dx;for(var i=1;i<=24;i+=2){var h1=S.getMoonPosition(hl(t,i),lat,lng).altitude-hc,h2=S.getMoonPosition(hl(t,i+1),lat,lng).altitude-hc,a=(h0+h2)/2-h1,b=(h2-h0)/2,xe=-b/(2*a);ye=(a*xe+b)*xe+h1;d=b*b-4*a*h1;var roots=0;if(d>=0){dx=Math.sqrt(d)/(Math.abs(a)*2);x1=xe-dx;x2=xe+dx;if(Math.abs(x1)<=1)roots++;if(Math.abs(x2)<=1)roots++;if(x1<-1)x1=x2}if(roots===1){if(h0<0)rise=i+x1;else set=i+x1}else if(roots===2){rise=i+(ye<0?x2:x1);set=i+(ye<0?x1:x2)}if(rise&&set)break;h0=h2}var r={};if(rise)r.rise=hl(t,rise);if(set)r.set=hl(t,set);if(!rise&&!set)r[ye>0?'alwaysUp':'alwaysDown']=true;return r};
-window.SunCalc=S;})();
+<script type="module">
+/* ------------------------------------------------------------------ *
+ * Dashboard consumer. The astronomy, forecast fetch, and scoring all
+ * live in ./src/*.js — the SAME core the CLI binds to. Everything below
+ * is presentation: DOM rendering and UI state only.
+ * ------------------------------------------------------------------ */
+import { CB, LOCATIONS, haversine } from "./src/locations.js";
+import { fetchLoc } from "./src/forecast.js";
+import { fmtTime, WD } from "./src/astro.js";
+import { THRESHOLDS, verdictLabel, buildGrid as buildGridCore } from "./src/scoring.js";
 
-/* ---------- Config ---------- */
-var CB={lat:48.9517,lng:-57.9344}; // Corner Brook
-var LOCATIONS=[
-  {name:"Blow Me Down Prov. Park",    lat:49.10, lng:-58.40, note:"~40 min · Bay of Islands"},
-  {name:"Sir Richard Squires Park",   lat:49.33, lng:-57.38, note:"~50 min · Humber valley"},
-  {name:"Barachois Pond Prov. Park",  lat:48.50, lng:-58.27, note:"~45 min · off the TCH"},
-  {name:"Gros Morne — Berry Hill",    lat:49.62, lng:-57.85, note:"~1 hr · near Rocky Harbour"},
-  {name:"Gros Morne — Trout River",   lat:49.48, lng:-58.11, note:"~1 hr 15 · Tablelands"},
-  {name:"Terra Nova Nat. Park",       lat:48.55, lng:-53.98, note:"~4½ hr · dark-sky preserve"}
-];
-var TH={
-  strict:  {cloudGo:12,visGo:15000,precipGo:10, cloudMaybe:30,visMaybe:8000,precipMaybe:25},
-  relaxed: {cloudGo:20,visGo:12000,precipGo:15, cloudMaybe:45,visMaybe:6000,precipMaybe:35}
-};
+/* ---------- UI state ---------- */
 var mode="strict";
 var DATA=[];      // per-location fetched forecast
 var OFFSET=null;  // NL utc offset seconds
 var GRID=[];      // computed nights [loc][night]
 var SEL=null;
 
-/* ---------- Time helpers (work in true epoch; display in NL local via offset) ---------- */
-function omEpoch(iso,offSec){return Date.parse(iso+"Z")-offSec*1000}
-function parts(epoch,offSec){var d=new Date(epoch+offSec*1000);return{y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),hh:d.getUTCHours(),mm:d.getUTCMinutes(),wd:d.getUTCDay()}}
-function localNoonInstant(y,m,d,offSec){return Date.UTC(y,m-1,d,12,0,0)-offSec*1000}
-function localMidnightInstant(y,m,d,offSec){return Date.UTC(y,m-1,d,0,0,0)-offSec*1000}
-function fmtTime(epoch,offSec){if(epoch==null||isNaN(epoch))return"—";var p=parts(epoch,offSec);var h=p.hh,ap=h<12?"AM":"PM";h=h%12;if(h===0)h=12;return h+":"+String(p.mm).padStart(2,"0")+" "+ap}
-var WD=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-var MO=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function validDate(x){return x&&!isNaN(x.getTime())}
-
-/* ---------- Fetch ---------- */
-function fetchLoc(loc){
-  var u="https://api.open-meteo.com/v1/forecast?latitude="+loc.lat+"&longitude="+loc.lng+
-    "&hourly=cloud_cover,cloud_cover_low,visibility,precipitation_probability,temperature_2m,wind_speed_10m"+
-    "&timezone=auto&forecast_days=8";
-  return fetch(u).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(j){
-    var off=j.utc_offset_seconds, h=j.hourly, n=h.time.length, ep=new Array(n);
-    for(var i=0;i<n;i++)ep[i]=omEpoch(h.time[i],off);
-    return{loc:loc,off:off,ep:ep,cloud:h.cloud_cover,low:h.cloud_cover_low,vis:h.visibility,
-      precip:h.precipitation_probability,temp:h.temperature_2m,wind:h.wind_speed_10m};
-  });
-}
-
-/* ---------- Compute one night for one location ---------- */
-function computeNight(d,nightIdx){
-  var off=d.off;
-  var today=parts(Date.now(),off);
-  // target evening date = today + nightIdx
-  var base=new Date(localNoonInstant(today.y,today.m,today.d,off)+nightIdx*864e5);
-  var bp=parts(base.getTime(),off);
-  var eveNoon=new Date(localNoonInstant(bp.y,bp.m,bp.d,off));
-  var nextNoon=new Date(eveNoon.getTime()+864e5);
-  var np=parts(nextNoon.getTime(),off);
-
-  var te=SunCalc.getTimes(eveNoon,d.loc.lat,d.loc.lng);   // this evening
-  var tm=SunCalc.getTimes(nextNoon,d.loc.lat,d.loc.lng);  // next morning
-
-  var startD=validDate(te.nauticalDusk)?te.nauticalDusk:(validDate(te.sunset)?new Date(te.sunset.getTime()+90*6e4):null);
-  var morningLimit=validDate(tm.nauticalDawn)?tm.nauticalDawn:new Date(startD.getTime()+3*36e5);
-  var endD=new Date(Math.min(startD.getTime()+3*36e5, morningLimit.getTime()));
-  var ws=startD.getTime(), we=endD.getTime(), wm=(ws+we)/2;
-
-  // darkness level reached during window
-  var astroExists=validDate(te.night)&&validDate(tm.nightEnd);
-  var darkLevel = (astroExists && we>te.night.getTime()) ? "astronomical" :
-                  (validDate(te.nauticalDusk) ? "nautical" : "twilight");
-
-  // moon
-  var ill=SunCalc.getMoonIllumination(new Date(wm));
-  var moonUp = SunCalc.getMoonPosition(new Date(ws),d.loc.lat,d.loc.lng).altitude>0 ||
-               SunCalc.getMoonPosition(new Date(wm),d.loc.lat,d.loc.lng).altitude>0 ||
-               SunCalc.getMoonPosition(new Date(we),d.loc.lat,d.loc.lng).altitude>0;
-  var brightMoon = moonUp && ill.fraction>0.35;
-  var mt=SunCalc.getMoonTimes(new Date(localMidnightInstant(bp.y,bp.m,bp.d,off)),d.loc.lat,d.loc.lng,false);
-
-  // weather over window
-  var hrs=[], maxCloud=0, maxLow=0, minVis=null, maxPrecip=0, tSum=0, wSum=0, wMax=0;
-  for(var i=0;i<d.ep.length;i++){
-    if(d.ep[i]>=ws && d.ep[i]<=we){
-      var c=d.cloud[i]||0, lo=d.low[i]||0, v=d.vis[i], pr=d.precip[i]||0, tp=d.temp[i], wd_=d.wind[i]||0;
-      maxCloud=Math.max(maxCloud,c); maxLow=Math.max(maxLow,lo);
-      if(v!=null){minVis=(minVis==null)?v:Math.min(minVis,v);}
-      maxPrecip=Math.max(maxPrecip,pr); tSum+=(tp||0); wSum+=wd_; wMax=Math.max(wMax,wd_);
-      hrs.push({ep:d.ep[i],cloud:c,low:lo,vis:v,precip:pr,temp:tp,wind:wd_});
-    }
-  }
-  var noData=hrs.length===0;
-
-  // verdict
-  var t=TH[mode];
-  var visGo = (minVis==null)||(minVis>=t.visGo);
-  var visMb = (minVis==null)||(minVis>=t.visMaybe);
-  var go   = !noData && maxCloud<=t.cloudGo   && visGo && maxPrecip<=t.precipGo;
-  var maybe= !noData && !go && maxCloud<=t.cloudMaybe && visMb && maxPrecip<=t.precipMaybe;
-  var verdict = noData?"nodata":(go?"go":(maybe?"maybe":"no"));
-  var tier = verdict;
-  if(go && !brightMoon && darkLevel==="astronomical") tier="prime";
-  else if(go && brightMoon) tier="go-moon";
-
-  var isPerseid = (bp.y===2026 && bp.m===8 && (bp.d===12 || bp.d===13));
-
-  return {
-    locName:d.loc.name, off:off, nightIdx:nightIdx,
-    dayLabel: nightIdx===0?"Tonight":(nightIdx===1?"Tomorrow":WD[bp.wd]+" "+bp.d),
-    dateLabel: WD[bp.wd]+" "+MO[bp.m-1]+" "+bp.d,
-    verdict:verdict, tier:tier, reliable:nightIdx<=2, isPerseid:isPerseid, noData:noData,
-    maxCloud:Math.round(maxCloud), maxLow:Math.round(maxLow),
-    minVis:minVis, maxPrecip:Math.round(maxPrecip),
-    avgTemp: hrs.length?Math.round(tSum/hrs.length):null,
-    avgWind: hrs.length?Math.round(wSum/hrs.length):null, maxWind:Math.round(wMax),
-    moonFrac:ill.fraction, moonUp:moonUp, brightMoon:brightMoon,
-    moonrise:validDate(mt.rise)?mt.rise.getTime():null, moonset:validDate(mt.set)?mt.set.getTime():null,
-    darkLevel:darkLevel, ws:ws, we:we, hours:hrs
-  };
-}
-
-/* ---------- Build all ---------- */
+/* ---------- Build all (delegates scoring to the core) ---------- */
 function buildGrid(){
-  GRID=DATA.map(function(d){var arr=[];for(var n=0;n<7;n++)arr.push(computeNight(d,n));return arr;});
+  GRID=buildGridCore(DATA,mode,Date.now());
 }
 
 /* ---------- Render ---------- */
 function moonGlyph(f){ // simple phase description
   if(f<0.03)return"new";if(f<0.35)return"cres";if(f<0.65)return"half";if(f<0.97)return"gib";return"full";
 }
-function verdictWord(t){return t==="prime"?"PRIME":t==="go-moon"?"GO":t==="go"?"GO":t==="maybe"?"MAYBE":t==="nodata"?"—":"NO"}
+function verdictWord(t){return verdictLabel(t);}
 function tileClass(t){return t==="prime"?"t-prime":(t==="go"||t==="go-moon")?"t-go":t==="maybe"?"t-maybe":t==="nodata"?"t-nodata":"t-no"}
 
 function render(){
@@ -455,7 +331,7 @@ function renderDetail(){
   var rows="";
   if(c.hours.length){
     c.hours.forEach(function(h){
-      var warn=h.cloud>TH[mode].cloudGo?' class="warn"':'';
+      var warn=h.cloud>THRESHOLDS[mode].cloudGo?' class="warn"':'';
       rows+='<tr><td>'+fmtTime(h.ep,off)+'</td>'+
         '<td'+warn+'>'+Math.round(h.cloud)+'%</td>'+
         '<td>'+Math.round(h.low)+'%</td>'+
@@ -502,11 +378,6 @@ function renderPerseidFoot(){
   var el=document.getElementById("perseid-foot");
   el.innerHTML="★ Aug 12–13, 2026: the Perseid meteor shower peaks on a new moon — the darkest Perseids until 2029. Genuine astronomical darkness returns to Newfoundland by mid-August, so if any spot shows clear those nights, it's the trip of the summer.";
 }
-
-/* ---------- Distance ---------- */
-function haversine(la1,lo1,la2,lo2){var R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180,
-  a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2);
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 
 /* ---------- Load ---------- */
 function load(){
