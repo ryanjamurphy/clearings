@@ -34,6 +34,64 @@ export function fmtTime(epoch, offSec) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Sky darkness — how dark the sky itself is, WEATHER ASIDE. Driven only
+ * by twilight (how far the sun is below the horizon) and moonlight
+ * (moon altitude × illuminated fraction). Cloud is deliberately NOT in
+ * here — that's the verdict's job. This answers "best case, what would
+ * I see?"; the verdict answers "will the weather let me?".
+ *
+ * Output carries a plain-language tier (for a glance) and an
+ * approximate naked-eye limiting magnitude (the faintest star visible:
+ * ~6.5 pristine dark, ~4.5 a bright-moon night, ~2 downtown).
+ * ------------------------------------------------------------------ */
+export const SKY_TIERS = [
+  { min: 6.0, key: "milky-way",       label: "Milky Way" },
+  { min: 5.3, key: "milky-way-faint", label: "Faint Milky Way" },
+  { min: 4.4, key: "starry",          label: "Starry" },
+  { min: 3.4, key: "bright-stars",    label: "Bright stars only" },
+  { min: -Infinity, key: "washed",    label: "Washed out" }
+];
+function tierForMag(mag) {
+  for (var i = 0; i < SKY_TIERS.length; i++) if (mag >= SKY_TIERS[i].min) return SKY_TIERS[i];
+  return SKY_TIERS[SKY_TIERS.length - 1];
+}
+
+/* Darkness index 0..1 at one instant (0 = daylit/moon-washed, 1 = pristine). */
+function darknessScore(loc, epoch) {
+  var d = new Date(epoch);
+  var hs = SunCalc.getPosition(d, loc.lat, loc.lng).altitude * 180 / Math.PI; // sun altitude, degrees
+  var tw; // twilight darkness, continuous across the standard bands
+  if (hs <= -18) tw = 1;                                 // astronomical dark
+  else if (hs <= -12) tw = 0.6 + 0.4 * (-12 - hs) / 6;  // nautical
+  else if (hs <= -6)  tw = 0.25 + 0.35 * (-6 - hs) / 6; // civil
+  else if (hs < 0)    tw = 0.25 * (-hs) / 6;            // dusk
+  else tw = 0;                                          // sun up
+  var mp = SunCalc.getMoonPosition(d, loc.lat, loc.lng);
+  var moonFactor = 1;
+  if (mp.altitude > 0) {
+    var ill = SunCalc.getMoonIllumination(d).fraction;
+    moonFactor = 1 - 0.75 * ill * Math.sin(mp.altitude); // full moon at zenith → 0.25
+  }
+  return tw * moonFactor;
+}
+
+function skyReading(score) {
+  var mag = Math.round((2 + 4.5 * score) * 10) / 10; // 0→2.0, 1→6.5
+  var t = tierForMag(mag);
+  return { score: score, mag: mag, tier: t.key, label: t.label };
+}
+
+/* Sky darkness at a single instant (used per-hour in the detail view). */
+export function skyAt(loc, epoch) { return skyReading(darknessScore(loc, epoch)); }
+
+/* Representative sky darkness for a whole window: sampled at start,
+ * middle, and end and averaged (used for the calendar glance). Weather-
+ * independent, so it's available even past the forecast horizon. */
+export function nightSky(loc, ws, wm, we) {
+  return skyReading((darknessScore(loc, ws) + darknessScore(loc, wm) + darknessScore(loc, we)) / 3);
+}
+
+/* ------------------------------------------------------------------ *
  * nightAstro — the viewing window, darkness level, and moon state for
  * the evening `nightIdx` days after `nowEpoch`, at one location.
  *
@@ -86,6 +144,7 @@ export function nightAstro(loc, off, nightIdx, nowEpoch) {
     moonFrac: ill.fraction, moonUp: moonUp, brightMoon: brightMoon,
     moonrise: validDate(mt.rise) ? mt.rise.getTime() : null,
     moonset: validDate(mt.set) ? mt.set.getTime() : null,
-    darkLevel: darkLevel, ws: ws, we: we, wm: wm
+    darkLevel: darkLevel, ws: ws, we: we, wm: wm,
+    sky: nightSky(loc, ws, wm, we)
   };
 }

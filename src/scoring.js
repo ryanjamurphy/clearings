@@ -8,7 +8,7 @@
  * gate — non-negotiable), and precip. Cloud-only checks miss coastal
  * fog, the Newfoundland-specific killer. See CLAUDE.md note #5.
  * ------------------------------------------------------------------ */
-import { nightAstro } from "./astro.js";
+import { nightAstro, skyAt } from "./astro.js";
 
 export const THRESHOLDS = {
   strict:  { cloudGo: 12, visGo: 15000, precipGo: 10, cloudMaybe: 30, visMaybe: 8000, precipMaybe: 25 },
@@ -46,7 +46,7 @@ export function computeNight(d, nightIdx, mode, nowEpoch) {
       maxCloud = Math.max(maxCloud, c); maxLow = Math.max(maxLow, lo);
       if (v != null) { minVis = (minVis == null) ? v : Math.min(minVis, v); }
       maxPrecip = Math.max(maxPrecip, pr); tSum += (tp || 0); wSum += wd_; wMax = Math.max(wMax, wd_);
-      hrs.push({ ep: d.ep[i], cloud: c, low: lo, vis: v, precip: pr, temp: tp, wind: wd_ });
+      hrs.push({ ep: d.ep[i], cloud: c, low: lo, vis: v, precip: pr, temp: tp, wind: wd_, sky: skyAt(d.loc, d.ep[i]) });
     }
   }
   var noData = hrs.length === 0;
@@ -72,7 +72,7 @@ export function computeNight(d, nightIdx, mode, nowEpoch) {
     avgWind: hrs.length ? Math.round(wSum / hrs.length) : null, maxWind: Math.round(wMax),
     moonFrac: a.moonFrac, moonUp: a.moonUp, brightMoon: a.brightMoon,
     moonrise: a.moonrise, moonset: a.moonset,
-    darkLevel: a.darkLevel, ws: a.ws, we: a.we, hours: hrs
+    darkLevel: a.darkLevel, sky: a.sky, ws: a.ws, we: a.we, hours: hrs
   };
 }
 

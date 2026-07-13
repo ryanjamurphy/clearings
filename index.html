@@ -111,6 +111,7 @@
   .tile .verdict{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
     font-weight:600}
   .tile .meta{font-family:var(--mono);font-size:.63rem;color:#c4cdca;margin-top:3px;white-space:nowrap}
+  .tile .sky{font-family:var(--mono);font-size:.57rem;margin-top:3px;letter-spacing:.02em;white-space:nowrap;opacity:.92}
   .t-prime{background:linear-gradient(160deg,rgba(111,161,90,.34),rgba(36,88,64,.2));
     box-shadow:inset 0 0 0 1px rgba(111,161,90,.55),0 0 14px rgba(111,161,90,.22)}
   .t-prime .verdict{color:#c7e6b4}
@@ -234,6 +235,9 @@ function moonGlyph(f){ // simple phase description
 }
 function verdictWord(t){return verdictLabel(t);}
 function tileClass(t){return t==="prime"?"t-prime":(t==="go"||t==="go-moon")?"t-go":t==="maybe"?"t-maybe":t==="nodata"?"t-nodata":"t-no"}
+// sky-tier presentation (weather-independent darkness). Milky-Way tiers glow gold; washed tiers fade to grey.
+function skyShort(t){return{"milky-way":"Milky Way","milky-way-faint":"MW · faint","starry":"Starry","bright-stars":"Bright stars","washed":"Washed out"}[t]||"";}
+function skyColor(t){return{"milky-way":"#EDE68A","milky-way-faint":"#DCCC78","starry":"#AA9972","bright-stars":"#9aa4a1","washed":"#6d7876"}[t]||"#9aa4a1";}
 
 function render(){
   renderStamp();
@@ -304,7 +308,8 @@ function renderMatrix(){
       var moon = (!c.noData && c.moonUp) ? '<span class="moonbadge">☾'+Math.round(c.moonFrac*100)+'%</span>' : '';
       html+='<div class="cell tile '+tileClass(c.tier)+sel+'" tabindex="0" role="button" '+
         'data-li="'+li+'" data-ni="'+ni+'" aria-label="'+loc.name+' '+c.dayLabel+' '+verdictWord(c.tier)+'">'+
-        moon+'<div class="verdict">'+verdictWord(c.tier)+'</div><div class="meta">'+meta+'</div></div>';
+        moon+'<div class="verdict">'+verdictWord(c.tier)+'</div><div class="meta">'+meta+'</div>'+
+        '<div class="sky" style="color:'+skyColor(c.sky.tier)+'">'+skyShort(c.sky.tier)+'</div></div>';
     });
   });
   g.innerHTML=html;
@@ -336,11 +341,12 @@ function renderDetail(){
         '<td'+warn+'>'+Math.round(h.cloud)+'%</td>'+
         '<td>'+Math.round(h.low)+'%</td>'+
         '<td>'+(h.vis!=null?(h.vis/1000).toFixed(0):"—")+'</td>'+
+        '<td style="color:'+skyColor(h.sky.tier)+'">'+skyShort(h.sky.tier)+' <small style="color:#8b9591">'+h.sky.mag+'</small></td>'+
         '<td>'+(h.temp!=null?Math.round(h.temp)+"°":"—")+'</td>'+
         '<td>'+Math.round(h.wind)+'</td></tr>';
     });
   }else{
-    rows='<tr><td colspan="6" style="text-align:center;color:#8b9591">Beyond the reliable forecast horizon — treat as a rough outlook.</td></tr>';
+    rows='<tr><td colspan="7" style="text-align:center;color:#8b9591">Beyond the reliable forecast horizon — treat as a rough outlook.</td></tr>';
   }
 
   var rationale;
@@ -364,13 +370,15 @@ function renderDetail(){
       '<div class="dfacts">'+
         '<div class="fact"><div class="k">Viewing window</div><div class="v">'+fmtTime(c.ws,off)+' – '+fmtTime(c.we,off)+' <small>NDT</small></div></div>'+
         '<div class="fact"><div class="k">Darkness</div><div class="v">'+darkTxt+'</div></div>'+
+        '<div class="fact"><div class="k">Sky (best case)</div><div class="v" style="color:'+skyColor(c.sky.tier)+'">'+c.sky.label+' <small style="color:#aeb8b5">to mag '+c.sky.mag+'</small></div></div>'+
         '<div class="fact"><div class="k">Cloud (max)</div><div class="v">'+(c.noData?"—":c.maxCloud+'%')+' <small>'+(c.noData?'':'low '+c.maxLow+'%')+'</small></div></div>'+
         '<div class="fact"><div class="k">Moon</div><div class="v">'+moonState+'</div></div>'+
         '<div class="fact"><div class="k">Moonrise / set</div><div class="v" style="font-size:.9rem">'+fmtTime(c.moonrise,off)+' / '+fmtTime(c.moonset,off)+'</div></div>'+
         '<div class="fact"><div class="k">Temp / wind</div><div class="v">'+(c.avgTemp!=null?c.avgTemp+'°C':'—')+' <small>'+(c.avgWind!=null?'~'+c.avgWind+' km/h':'')+'</small></div></div>'+
       '</div>'+
-      '<table class="htable"><thead><tr><th>Hour</th><th>Cloud</th><th>Low</th><th>Vis km</th><th>Temp</th><th>Wind</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<table class="htable"><thead><tr><th>Hour</th><th>Cloud</th><th>Low</th><th>Vis km</th><th>Sky</th><th>Temp</th><th>Wind</th></tr></thead><tbody>'+rows+'</tbody></table>'+
       '<div class="rationale">'+rationale+'</div>'+
+      '<div class="rationale" style="opacity:.72">Sky is how dark the sky itself is — Moon &amp; twilight only, weather aside — so it holds even on a clouded night. <b>mag</b> is the faintest star the naked eye could catch: ~6.5 pristine, ~5.5 faint Milky Way, ~4.5 a bright-moon night, ~2 downtown.</div>'+
     '</div>';
 }
 

@@ -84,12 +84,6 @@ function speakableWhen(c) {
   return `${FULL_WD[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} night`;
 }
 
-function darknessPhrase(level) {
-  return level === "astronomical" ? "full dark"
-       : level === "nautical" ? "deep twilight (no full dark)"
-       : "twilight only";
-}
-
 function moonPhrase(c) {
   const pct = Math.round(c.moonFrac * 100);
   if (!c.moonUp) return `moon down (${pct}% lit)`;
@@ -118,6 +112,7 @@ function bestEntry(c, loc) {
     cloud: c.maxCloud,
     visibilityKm: c.minVis == null ? null : Math.round(c.minVis / 1000),
     darkness: c.darkLevel,
+    sky: { tier: c.sky.tier, label: c.sky.label, mag: c.sky.mag },
     moon: moonPhrase(c),
     isPerseid: c.isPerseid,
     why: shortWhy(c),
@@ -140,6 +135,7 @@ function nightLocation(c, loc, off) {
     visibilityKm: c.minVis == null ? null : Math.round(c.minVis / 1000),
     precipPct: c.noData ? null : c.maxPrecip,
     darkness: c.darkLevel,
+    sky: { tier: c.sky.tier, label: c.sky.label, mag: c.sky.mag },
     moon: {
       up: c.moonUp, bright: c.brightMoon, illumPct: Math.round(c.moonFrac * 100),
       rise: c.moonrise == null ? null : fmtTime(c.moonrise, off),
@@ -232,7 +228,7 @@ function printHuman(payload, grid, data, unavailable) {
       const v = paint(padEnd(b.verdict, 6), verdictColor(b.verdict === "PRIME" ? "prime" : "go"));
       const when = padEnd(b.night, 11);
       const where = padEnd(trunc(b.locationName, 24), 25);
-      const why = `${b.cloud}% cloud · ${darknessPhrase(b.darkness)} · ${b.moon}`;
+      const why = `${b.cloud}% cloud · ${b.sky.label} to mag ${b.sky.mag} · ${b.moon}`;
       const per = b.isPerseid ? paint("  ★ Perseid", C.gold) : "";
       out.push(`  ${v} ${when} ${where} ${paint(why, C.dim)}${per}`);
     }
