@@ -63,7 +63,7 @@ export function computeNight(d, nightIdx, mode, nowEpoch) {
   else if (go && a.brightMoon) tier = "go-moon";
 
   return {
-    locName: d.loc.name, off: a.off, nightIdx: nightIdx,
+    locName: d.loc.name, off: a.off, nightIdx: nightIdx, date: a.date,
     dayLabel: a.dayLabel, dateLabel: a.dateLabel,
     verdict: verdict, tier: tier, reliable: a.reliable, isPerseid: a.isPerseid, noData: noData,
     maxCloud: Math.round(maxCloud), maxLow: Math.round(maxLow),

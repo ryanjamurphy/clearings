@@ -76,9 +76,10 @@ export function nightAstro(loc, off, nightIdx, nowEpoch) {
   var mt = SunCalc.getMoonTimes(new Date(localMidnightInstant(bp.y, bp.m, bp.d, off)), loc.lat, loc.lng, false);
 
   var isPerseid = (bp.y === 2026 && bp.m === 8 && (bp.d === 12 || bp.d === 13));
+  var ymd = bp.y + "-" + String(bp.m).padStart(2, "0") + "-" + String(bp.d).padStart(2, "0");
 
   return {
-    off: off, nightIdx: nightIdx, bp: bp,
+    off: off, nightIdx: nightIdx, bp: bp, date: ymd,
     dayLabel: nightIdx === 0 ? "Tonight" : (nightIdx === 1 ? "Tomorrow" : WD[bp.wd] + " " + bp.d),
     dateLabel: WD[bp.wd] + " " + MO[bp.m - 1] + " " + bp.d,
     reliable: nightIdx <= 2, isPerseid: isPerseid,
