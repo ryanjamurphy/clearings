@@ -350,9 +350,11 @@ function renderDetail(){
       (c.tier==="prime"?"Milky Way with the moon out of the way — the trip of the summer.":"A genuinely dark sky — set the alarm.");
   }
   else if(c.verdict==="maybe"){
-    rationale = clearBlock
-      ? "Clear at the darkest point, but the sky only reaches "+c.sky.label.toLowerCase()+" (mag "+c.sky.mag+") — "+(c.brightMoon?"a bright moon washes out the Milky Way":"lingering twilight keeps it from getting truly dark")+". Fine for the Moon, planets and bright stars with the kids; not a Milky Way night — probably not worth waking them."
-      : "Borderline weather: cloud reaches "+c.maxCloud+"% around the darkest point. Might clear — worth watching as it updates, not a sure thing.";
+    rationale = c.demoted
+      ? "The viewing window itself is clear with a "+c.sky.label.toLowerCase()+" sky — but the night around it is unsettled: cloud up to "+c.campMaxCloud+"% and "+c.campMaxPrecip+"% rain across the evening and pre-dawn. That clear window is a fragile bet in weather like this, and setup or teardown would likely be wet. Not worth committing a camp to."
+      : clearBlock
+        ? "Clear at the darkest point, but the sky only reaches "+c.sky.label.toLowerCase()+" (mag "+c.sky.mag+") — "+(c.brightMoon?"a bright moon washes out the Milky Way":"lingering twilight keeps it from getting truly dark")+". Fine for the Moon, planets and bright stars with the kids; not a Milky Way night — probably not worth waking them."
+        : "Borderline weather: cloud reaches "+c.maxCloud+"% around the darkest point. Might clear — worth watching as it updates, not a sure thing.";
   }
   else{rationale="Not worth waking them: "+c.maxCloud+"% cloud"+(c.maxLow>40?" (a lot of it low cloud / possible fog)":"")+", visibility "+visKm+", "+c.maxPrecip+"% precip at the darkest point.";}
 
@@ -369,6 +371,7 @@ function renderDetail(){
         '<div class="fact"><div class="k">Sky (best case)</div><div class="v" style="color:'+skyColor(c.sky.tier)+'">'+c.sky.label+' <small style="color:#aeb8b5">to mag '+c.sky.mag+'</small></div></div>'+
         '<div class="fact"><div class="k">Darkness</div><div class="v">'+darkTxt+'</div></div>'+
         '<div class="fact"><div class="k">Cloud (block)</div><div class="v">'+(c.noData?"—":c.maxCloud+'%')+' <small>'+(c.noData?'':'low '+c.maxLow+'%')+'</small></div></div>'+
+        '<div class="fact"><div class="k">Camp night</div><div class="v" style="color:'+(c.settled?'#a6d18f':'#c98a92')+'">'+(c.noData?"—":(c.settled?'settled':'unsettled'))+' <small style="color:#aeb8b5">'+(c.noData?'':'cloud to '+c.campMaxCloud+'% · rain '+c.campMaxPrecip+'%')+'</small></div></div>'+
         '<div class="fact"><div class="k">Moon</div><div class="v">'+moonState+'</div></div>'+
         '<div class="fact"><div class="k">Moonrise / set</div><div class="v" style="font-size:.9rem">'+fmtTime(c.moonrise,off)+' / '+fmtTime(c.moonset,off)+'</div></div>'+
         '<div class="fact"><div class="k">Temp / wind</div><div class="v">'+(c.avgTemp!=null?c.avgTemp+'°C':'—')+' <small>'+(c.avgWind!=null?'~'+c.avgWind+' km/h':'')+'</small></div></div>'+

@@ -14,8 +14,16 @@
  * ------------------------------------------------------------------ */
 import { nightAstro, skyAt } from "./astro.js";
 
-/* One strict bar (the old "forgiving" mode is gone). */
-export const THRESHOLDS = { cloudGo: 12, visGo: 15000, precipGo: 10, cloudMaybe: 30, visMaybe: 8000, precipMaybe: 25 };
+/* One strict bar (the old "forgiving" mode is gone).
+ *   *Go/*Maybe    — cloud/vis/precip gates over the 30-min viewing block.
+ *   settle*       — the "is the night settled enough to camp?" gates,
+ *                   scanned over the camp span (evening setup → dawn).
+ *                   A clear hole in an otherwise cloudy/rainy night is a
+ *                   fragile bet and a rough camp, so it can't be GO/PRIME. */
+export const THRESHOLDS = {
+  cloudGo: 12, visGo: 15000, precipGo: 10, cloudMaybe: 30, visMaybe: 8000, precipMaybe: 25,
+  settleCloud: 50, settlePrecip: 15, settleVis: 5000
+};
 
 /* The verdict vocabulary — the SAME words in the dashboard, the JSON,
  * and the code. Never invent synonyms. */
@@ -71,6 +79,26 @@ export function computeNight(d, nightIdx, nowEpoch) {
   else if (weatherGo && faintMw) tier = "go";          // clear + faint Milky Way → worth the camp
   else if (weatherGo || weatherMaybe) tier = "maybe";  // clear but washed/twilight, or borderline weather
   else tier = "no";                                    // clouded / fogged / wet
+  // --- camp settledness: is the surrounding night stable enough to commit? ---
+  // A clear 30-min hole in an otherwise rainy/cloudy night is a fragile bet
+  // AND a rough camp (wet setup, wet teardown). Scan the camp span — an
+  // evening setup shoulder through dawn — and demote an otherwise-worthy
+  // night to MAYBE if cloud, rain risk, or fog moves through it.
+  var campStart = a.nightStart - 3 * 36e5;
+  var campMaxCloud = 0, campMaxPrecip = 0, campMinVis = null, campHrs = 0;
+  for (var m = 0; m < d.ep.length; m++) {
+    if (d.ep[m] >= campStart && d.ep[m] <= a.nightEnd) {
+      campHrs++;
+      campMaxCloud = Math.max(campMaxCloud, d.cloud[m] || 0);
+      campMaxPrecip = Math.max(campMaxPrecip, d.precip[m] || 0);
+      var cv = d.vis[m]; if (cv != null) campMinVis = (campMinVis == null) ? cv : Math.min(campMinVis, cv);
+    }
+  }
+  var settled = campHrs === 0 ? true :
+    !(campMaxCloud > T.settleCloud || campMaxPrecip > T.settlePrecip || (campMinVis != null && campMinVis < T.settleVis));
+  var demoted = false;
+  if (!settled && (tier === "prime" || tier === "go")) { tier = "maybe"; demoted = true; }
+
   // `verdict` groups prime+go as "worth camping" for consumers.
   var verdict = (tier === "prime" || tier === "go") ? "go" : tier;
 
@@ -100,6 +128,8 @@ export function computeNight(d, nightIdx, nowEpoch) {
     moonFrac: a.moonFrac, moonUp: a.moonUp, brightMoon: a.brightMoon,
     moonrise: a.moonrise, moonset: a.moonset,
     darkLevel: a.darkLevel, sky: a.sky,
+    settled: settled, demoted: demoted,
+    campMaxCloud: Math.round(campMaxCloud), campMaxPrecip: Math.round(campMaxPrecip),
     alarm: a.alarm, ws: a.ws, we: a.we, peak: a.peak,
     nightStart: a.nightStart, nightEnd: a.nightEnd,
     hours: hours

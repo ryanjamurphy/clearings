@@ -129,6 +129,10 @@ function nightLocation(c, loc, off) {
     cloudLow: c.noData ? null : c.maxLow,
     visibilityKm: c.minVis == null ? null : Math.round(c.minVis / 1000),
     precipPct: c.noData ? null : c.maxPrecip,
+    settled: c.settled,
+    demoted: c.demoted,
+    campMaxCloud: c.noData ? null : c.campMaxCloud,
+    campMaxPrecip: c.noData ? null : c.campMaxPrecip,
     darkness: c.darkLevel,
     sky: { tier: c.sky.tier, label: c.sky.label, mag: c.sky.mag },
     moon: {
