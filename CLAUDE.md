@@ -225,6 +225,16 @@ but moon-washed night is a MAYBE, not worth waking them. (There is no "Forgiving
 bar.) The sky measure — a plain-language tier plus an approximate naked-eye limiting magnitude — is
 computed at the **peak** (darkest moment) for the calendar glance, and per-hour in the detail view.
 
+**Camp settledness (the demotion gate).** The clarity/sky gates above are scored over the 30-min
+viewing block, but a clear 30-min hole in an otherwise rainy/cloudy night is a fragile bet *and* a
+wet camp. So after the base verdict, `scoring.js` scans the **camp span** — an evening setup
+shoulder (`nightStart − 3h`) through dawn (`nightEnd`) — and if cloud (`settleCloud`), rain risk
+(`settlePrecip`), or fog (`settleVis`) moves through it, it **demotes** a PRIME/GO to MAYBE
+(`demoted: true`). This keeps the "you could gamble on it" middle ground while refusing to call a
+fragile window worth committing a camp to — the core "false positives are the failure mode" stance.
+The forecast is genuinely volatile in unsettled weather (a night's dawn cloud was seen swinging
+85% → 30% between fetches minutes apart), which is exactly why the gate is conservative.
+
 ---
 
 ## Design
