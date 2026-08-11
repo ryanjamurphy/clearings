@@ -51,7 +51,27 @@
     padding:8px 13px;border-radius:2px;cursor:pointer;transition:background .18s,border-color .18s}
   button:hover{background:rgba(63,98,124,.5);border-color:var(--gold-2)}
   button:focus-visible{outline:2px solid var(--gold-1);outline-offset:2px}
+  button.ghost{background:transparent;border-color:rgba(220,204,120,.25);color:#b9c3c0}
   .stamp{font-family:var(--mono);font-size:.68rem;color:var(--gold-mute);margin-left:auto}
+
+  /* add-a-spot form */
+  .addform{border:1px solid rgba(220,204,120,.28);border-radius:4px;
+    background:linear-gradient(160deg,rgba(38,56,61,.5),rgba(18,17,18,.3));padding:14px 15px;margin:2px 0 12px}
+  .addrow{display:grid;grid-template-columns:1.4fr .8fr .8fr 1.2fr;gap:10px 14px}
+  .addform label{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:.62rem;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--gold-mute)}
+  .addform label .opt{text-transform:none;letter-spacing:0;color:#8b9591}
+  .addform input{font-family:var(--sans);font-size:.9rem;color:var(--warm-white);
+    background:rgba(18,17,18,.4);border:1px solid rgba(220,204,120,.28);border-radius:2px;padding:7px 9px}
+  .addform input:focus-visible{outline:2px solid var(--gold-1);outline-offset:1px;border-color:var(--gold-2)}
+  .addactions{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .afmsg{font-family:var(--mono);font-size:.7rem;letter-spacing:.02em}
+  .afmsg.err{color:var(--bronze-1)}
+  .afmsg.ok{color:var(--forest-2)}
+  .afhint{font-family:var(--serif);font-style:italic;color:#9aa4a1;font-size:.86rem;margin-top:10px;line-height:1.5}
+  .rowlabel .addedtag{font-family:var(--mono);font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--navy-3);background:rgba(63,98,124,.3);padding:1px 5px;border-radius:2px;margin-left:6px;vertical-align:middle}
+  @media (max-width:640px){.addrow{grid-template-columns:1fr 1fr}}
 
   /* legend */
   .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:6px 0 20px;font-family:var(--mono);
@@ -175,7 +195,22 @@
 
   <div class="controls">
     <button id="refresh">↻ Refresh forecast</button>
+    <button id="add-spot">＋ Add a spot</button>
     <span class="stamp" id="stamp"></span>
+  </div>
+  <div id="add-form" class="addform" hidden>
+    <div class="addrow">
+      <label>Name<input id="af-name" type="text" placeholder="e.g. Cape St. George" autocomplete="off"></label>
+      <label>Latitude<input id="af-lat" type="text" inputmode="decimal" placeholder="49.20"></label>
+      <label>Longitude<input id="af-lng" type="text" inputmode="decimal" placeholder="-58.20"></label>
+      <label>Drive note <span class="opt">(optional)</span><input id="af-note" type="text" placeholder="~1 hr · south shore"></label>
+    </div>
+    <div class="addactions">
+      <button id="af-save">Save spot</button>
+      <button id="af-cancel" class="ghost">Cancel</button>
+      <span id="af-msg" class="afmsg" role="status" aria-live="polite"></span>
+    </div>
+    <div class="afhint">Tip: right-click a spot in Google/Apple Maps to copy its coordinates. Saved spots stay in this browser only — they're never uploaded or shared.</div>
   </div>
   <div class="legend">
     <span><i class="swatch sw-prime"></i> Prime — camp it: clear + Milky Way sky</span>
@@ -205,7 +240,7 @@
  * live in ./src/*.js — the SAME core the CLI binds to. Everything below
  * is presentation: DOM rendering and UI state only.
  * ------------------------------------------------------------------ */
-import { CB, LOCATIONS, haversine } from "./src/locations.js";
+import { CB, LOCATIONS, haversine, slugify, uniqueSlug, validateLocation } from "./src/locations.js";
 import { fetchLoc } from "./src/forecast.js";
 import { fmtTime, WD } from "./src/astro.js";
 import { THRESHOLDS, verdictLabel, buildGrid as buildGridCore } from "./src/scoring.js";
@@ -215,6 +250,27 @@ var DATA=[];      // per-location fetched forecast
 var OFFSET=null;  // NL utc offset seconds
 var GRID=[];      // computed nights [loc][night]
 var SEL=null;
+
+/* ---------- User-added spots (browser-only; the core stays canonical) ----------
+ * Persisted here in the dashboard, never in the core (core rule: no globals).
+ * The built-in LOCATIONS are shared with the CLI; these personal spots are
+ * private to this browser and never committed. */
+var LS_KEY="clearings.locations";
+function loadAdded(){
+  try{
+    var raw=localStorage.getItem(LS_KEY); if(!raw)return[];
+    var arr=JSON.parse(raw); if(!Array.isArray(arr))return[];
+    // keep only well-formed entries; tolerate a corrupt/partial store
+    return arr.filter(function(s){return s&&typeof s.lat==="number"&&typeof s.lng==="number"&&s.name;})
+              .map(function(s){return{slug:s.slug||slugify(s.name),name:s.name,lat:s.lat,lng:s.lng,note:s.note||"",added:true};});
+  }catch(e){return[];}
+}
+function saveAdded(list){
+  try{ localStorage.setItem(LS_KEY,JSON.stringify(list)); return true; }
+  catch(e){ return false; }
+}
+// The dashboard's working set: built-ins first, personal spots after.
+function allLocations(){ return LOCATIONS.concat(loadAdded()); }
 
 /* ---------- Build all (delegates scoring to the core) ---------- */
 function buildGrid(){
@@ -291,7 +347,8 @@ function renderMatrix(){
   GRID.forEach(function(row,li){
     var loc=DATA[li].loc;
     var km=Math.round(haversine(CB.lat,CB.lng,loc.lat,loc.lng));
-    html+='<div class="cell rowlabel"><div class="nm">'+loc.name+'</div><div class="dist">'+km+' km · '+loc.note+'</div></div>';
+    var addedTag=loc.added?'<span class="addedtag">yours</span>':'';
+    html+='<div class="cell rowlabel"><div class="nm">'+loc.name+addedTag+'</div><div class="dist">'+km+' km'+(loc.note?' · '+loc.note:'')+'</div></div>';
     row.forEach(function(c,ni){
       var sel=(SEL&&SEL.li===li&&SEL.ni===ni)?" sel":"";
       // worth-it nights lead with the alarm time; a "no" shows why (cloud)
@@ -390,9 +447,9 @@ function renderPerseidFoot(){
 /* ---------- Load ---------- */
 function load(){
   document.getElementById("grid").innerHTML='<div class="hint">Reading the sky over Newfoundland…</div>';
-  // sort locations by distance from Corner Brook
-  LOCATIONS.sort(function(a,b){return haversine(CB.lat,CB.lng,a.lat,a.lng)-haversine(CB.lat,CB.lng,b.lat,b.lng);});
-  Promise.all(LOCATIONS.map(function(l){return fetchLoc(l).catch(function(e){return{error:e.message,loc:l};});}))
+  // built-ins + personal spots, sorted (a COPY — never mutate the imported const) by distance from home
+  var locs=allLocations().sort(function(a,b){return haversine(CB.lat,CB.lng,a.lat,a.lng)-haversine(CB.lat,CB.lng,b.lat,b.lng);});
+  Promise.all(locs.map(function(l){return fetchLoc(l).catch(function(e){return{error:e.message,loc:l};});}))
   .then(function(res){
     var ok=res.filter(function(r){return !r.error;});
     if(!ok.length){
@@ -414,6 +471,43 @@ function load(){
 
 /* ---------- Controls ---------- */
 document.getElementById("refresh").addEventListener("click",load);
+
+/* ---------- Add-a-spot form ---------- */
+var addForm=document.getElementById("add-form");
+function afMsg(text,cls){var el=document.getElementById("af-msg");el.textContent=text||"";el.className="afmsg"+(cls?" "+cls:"");}
+function afToggle(show){
+  addForm.hidden=!show;
+  document.getElementById("add-spot").setAttribute("aria-expanded",show?"true":"false");
+  if(show){afMsg("");document.getElementById("af-name").focus();}
+}
+document.getElementById("add-spot").addEventListener("click",function(){afToggle(addForm.hidden);});
+document.getElementById("af-cancel").addEventListener("click",function(){afToggle(false);});
+function afReset(){["af-name","af-lat","af-lng","af-note"].forEach(function(id){document.getElementById(id).value="";});}
+function afSave(){
+  var input={name:document.getElementById("af-name").value,
+             lat:document.getElementById("af-lat").value.trim(),
+             lng:document.getElementById("af-lng").value.trim(),
+             note:document.getElementById("af-note").value};
+  var v=validateLocation(input);
+  if(!v.ok){afMsg(v.errors[0],"err");return;}
+  var added=loadAdded();
+  var taken=LOCATIONS.map(function(l){return l.slug;}).concat(added.map(function(s){return s.slug;}));
+  var spot={slug:uniqueSlug(slugify(v.value.name),taken),name:v.value.name,lat:v.value.lat,lng:v.value.lng,note:v.value.note,added:true};
+  // soft fat-finger warning — far from home, but don't block (astronomy works anywhere)
+  var far=haversine(CB.lat,CB.lng,spot.lat,spot.lng)>800;
+  if(!saveAdded(added.concat([spot]))){
+    afMsg("Couldn't save — this browser is blocking storage (private mode?).","err");return;
+  }
+  afMsg("Added "+spot.name+(far?" — note: that's >800 km from Corner Brook, check the coordinates.":"")+" · fetching…","ok");
+  afReset();
+  load();                 // re-fetch + re-score with the new spot included
+  setTimeout(function(){afToggle(false);},far?2600:900);
+}
+document.getElementById("af-save").addEventListener("click",afSave);
+addForm.addEventListener("keydown",function(ev){
+  if(ev.key==="Enter"){ev.preventDefault();afSave();}
+  else if(ev.key==="Escape"){afToggle(false);}
+});
 
 load();
 </script>

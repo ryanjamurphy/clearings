@@ -28,3 +28,48 @@ export function haversine(la1, lo1, la2, lo2) {
           Math.cos(la1 * Math.PI / 180) * Math.cos(la2 * Math.PI / 180) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+/* ------------------------------------------------------------------ *
+ * Helpers for user-added spots. Pure: string/number in, value out.
+ * Persistence (localStorage) is a consumer concern and lives in the
+ * dashboard — the core never touches globals.
+ * ------------------------------------------------------------------ */
+
+/* A URL/JSON-safe slug from a display name: lowercased, non-alphanumerics
+ * collapsed to single hyphens, ends trimmed. "" if nothing usable. */
+export function slugify(name) {
+  return String(name == null ? "" : name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/* Make `base` unique against a set of taken slugs by appending -2, -3, …
+ * `taken` may be an array or a Set. Falls back to "spot" for an empty base. */
+export function uniqueSlug(base, taken) {
+  var has = (typeof taken.has === "function") ? function (s) { return taken.has(s); }
+                                              : function (s) { return taken.indexOf(s) >= 0; };
+  var root = base || "spot", slug = root, i = 2;
+  while (has(slug)) { slug = root + "-" + i; i++; }
+  return slug;
+}
+
+/* Validate a proposed spot. Returns { ok, errors: [msg,…], value }.
+ * `value` (present only when ok) is a normalized {name,lat,lng,note} with
+ * numeric coords. Coords drive the astronomy, so this is the real gate. */
+export function validateLocation(input) {
+  var errors = [];
+  var name = String((input && input.name != null ? input.name : "")).trim();
+  if (!name) errors.push("Name can't be empty.");
+
+  var lat = Number(input && input.lat);
+  var lng = Number(input && input.lng);
+  if (!Number.isFinite(lat)) errors.push("Latitude must be a number.");
+  else if (lat < -90 || lat > 90) errors.push("Latitude must be between -90 and 90.");
+  if (!Number.isFinite(lng)) errors.push("Longitude must be a number.");
+  else if (lng < -180 || lng > 180) errors.push("Longitude must be between -180 and 180.");
+
+  if (errors.length) return { ok: false, errors: errors };
+  var note = String((input && input.note != null ? input.note : "")).trim();
+  return { ok: true, errors: [], value: { name: name, lat: lat, lng: lng, note: note } };
+}

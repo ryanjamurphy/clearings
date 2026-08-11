@@ -260,7 +260,12 @@ fetch. Fine on Pages, so it's a reasonable change to propose; just make it a del
 - Plain, literal interface language. No ceremonial metaphor, no "celestial journey" copy.
 - Verdicts are the vocabulary: **PRIME / GO / MAYBE / NO**. Same words in the dashboard, the JSON,
   and the code. Don't invent synonyms.
-- Locations, thresholds, and window length are configuration, not code. Adding a spot should be one
-  line in `locations.js`.
+- Locations, thresholds, and window length are configuration, not code. Adding a *canonical* spot
+  (shared with the CLI) is one line in `locations.js`. There is also an **end-user path**: the
+  dashboard can add personal spots via a form, persisted in `localStorage` (key `clearings.locations`)
+  and merged after the built-ins at load. Those are **browser-only and private by design** — they
+  never reach the repo or the CLI, which keeps precise personal coordinates out of the public repo.
+  The pure helpers (`slugify`, `uniqueSlug`, `validateLocation`) live in `locations.js`; the
+  localStorage read/write stays in the dashboard (core rule: no globals).
 - Empty states and errors say what happened and what to do — the tool has been wrong before
   (an offline sandbox reported as a weather outage), and a vague error cost real debugging time.
