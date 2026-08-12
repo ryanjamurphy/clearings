@@ -201,8 +201,8 @@
   <div id="add-form" class="addform" hidden>
     <div class="addrow">
       <label>Name<input id="af-name" type="text" placeholder="e.g. Cape St. George" autocomplete="off"></label>
-      <label>Latitude<input id="af-lat" type="text" inputmode="decimal" placeholder="49.20"></label>
-      <label>Longitude<input id="af-lng" type="text" inputmode="decimal" placeholder="-58.20"></label>
+      <label>Latitude<input id="af-lat" type="text" autocomplete="off" placeholder="49.20"></label>
+      <label>Longitude<input id="af-lng" type="text" autocomplete="off" placeholder="-58.20 (negative)"></label>
       <label>Drive note <span class="opt">(optional)</span><input id="af-note" type="text" placeholder="~1 hr · south shore"></label>
     </div>
     <div class="addactions">
@@ -210,7 +210,7 @@
       <button id="af-cancel" class="ghost">Cancel</button>
       <span id="af-msg" class="afmsg" role="status" aria-live="polite"></span>
     </div>
-    <div class="afhint">Tip: right-click a spot in Google/Apple Maps to copy its coordinates. Saved spots stay in this browser only — they're never uploaded or shared.</div>
+    <div class="afhint">Tip: right-click a spot in Google/Apple Maps to copy its coordinates, then paste the whole <code>lat, lng</code> into either box — it fills both, minus sign and all. Longitudes here are negative (west). Saved spots stay in this browser only — never uploaded or shared.</div>
   </div>
   <div class="legend">
     <span><i class="swatch sw-prime"></i> Prime — camp it: clear + Milky Way sky</span>
@@ -483,6 +483,21 @@ function afToggle(show){
 document.getElementById("add-spot").addEventListener("click",function(){afToggle(addForm.hidden);});
 document.getElementById("af-cancel").addEventListener("click",function(){afToggle(false);});
 function afReset(){["af-name","af-lat","af-lng","af-note"].forEach(function(id){document.getElementById(id).value="";});}
+
+/* Smart-paste: pasting a "lat, lng" pair (as Maps' "copy coordinates" gives —
+ * signs included) into either coordinate box fills both, sidestepping mobile
+ * keypads that have no minus key. Single values are left alone. */
+function afSplitPair(ev){
+  var v=ev.target.value;
+  var nums=v.match(/-?\d+(?:\.\d+)?/g);
+  if(nums&&nums.length>=2){
+    document.getElementById("af-lat").value=nums[0];
+    document.getElementById("af-lng").value=nums[1];
+    afMsg("");
+  }
+}
+document.getElementById("af-lat").addEventListener("input",afSplitPair);
+document.getElementById("af-lng").addEventListener("input",afSplitPair);
 function afSave(){
   var input={name:document.getElementById("af-name").value,
              lat:document.getElementById("af-lat").value.trim(),
