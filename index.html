@@ -71,6 +71,10 @@
   .afhint{font-family:var(--serif);font-style:italic;color:#9aa4a1;font-size:.86rem;margin-top:10px;line-height:1.5}
   .rowlabel .addedtag{font-family:var(--mono);font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;
     color:var(--navy-3);background:rgba(63,98,124,.3);padding:1px 5px;border-radius:2px;margin-left:6px;vertical-align:middle}
+  .rowlabel .delspot{font-family:var(--mono);font-size:.82rem;line-height:1;color:#c98a92;background:transparent;
+    border:1px solid rgba(197,116,83,.4);border-radius:2px;padding:0 5px;margin-left:6px;cursor:pointer;
+    text-transform:none;letter-spacing:0;vertical-align:middle}
+  .rowlabel .delspot:hover{background:rgba(127,42,57,.28);border-color:var(--bronze-1);color:#e6b8bd}
   @media (max-width:640px){.addrow{grid-template-columns:1fr 1fr}}
 
   /* legend */
@@ -348,7 +352,8 @@ function renderMatrix(){
     var loc=DATA[li].loc;
     var km=Math.round(haversine(CB.lat,CB.lng,loc.lat,loc.lng));
     var addedTag=loc.added?'<span class="addedtag">yours</span>':'';
-    html+='<div class="cell rowlabel"><div class="nm">'+loc.name+addedTag+'</div><div class="dist">'+km+' km'+(loc.note?' · '+loc.note:'')+'</div></div>';
+    var delBtn=loc.added?'<button class="delspot" data-slug="'+loc.slug+'" title="Remove this spot" aria-label="Remove '+loc.name+'">×</button>':'';
+    html+='<div class="cell rowlabel"><div class="nm">'+loc.name+addedTag+delBtn+'</div><div class="dist">'+km+' km'+(loc.note?' · '+loc.note:'')+'</div></div>';
     row.forEach(function(c,ni){
       var sel=(SEL&&SEL.li===li&&SEL.ni===ni)?" sel":"";
       // worth-it nights lead with the alarm time; a "no" shows why (cloud)
@@ -365,6 +370,24 @@ function renderMatrix(){
     el.addEventListener("click",function(){select(+el.dataset.li,+el.dataset.ni);});
     el.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();select(+el.dataset.li,+el.dataset.ni);}});
   });
+  Array.prototype.forEach.call(g.querySelectorAll(".delspot"),function(el){
+    el.addEventListener("click",function(ev){ev.stopPropagation();deleteSpot(el.dataset.slug);});
+  });
+}
+
+/* Remove a personal spot (built-ins have no × and can't be deleted). Confirms
+ * first — there's no undo — then re-renders from the current data without a
+ * refetch. Deletion clears any open detail, since row indices shift. */
+function deleteSpot(slug){
+  var added=loadAdded();
+  var target=null;
+  for(var i=0;i<added.length;i++){if(added[i].slug===slug){target=added[i];break;}}
+  if(!target)return;
+  if(!window.confirm('Remove "'+target.name+'" from your saved spots?'))return;
+  saveAdded(added.filter(function(s){return s.slug!==slug;}));
+  DATA=DATA.filter(function(d){return d.loc.slug!==slug;});
+  SEL=null;
+  buildGrid(); render();
 }
 
 function select(li,ni){SEL={li:li,ni:ni};render();var d=document.getElementById("detail");if(d)d.scrollIntoView({behavior:"smooth",block:"nearest"});}
@@ -484,20 +507,41 @@ document.getElementById("add-spot").addEventListener("click",function(){afToggle
 document.getElementById("af-cancel").addEventListener("click",function(){afToggle(false);});
 function afReset(){["af-name","af-lat","af-lng","af-note"].forEach(function(id){document.getElementById(id).value="";});}
 
-/* Maps and iOS often use a non-ASCII minus (U+2212 −, en/em/figure dashes,
- * fullwidth −) instead of the ASCII hyphen. Number() reads those as NaN and
- * a plain \-? regex misses them — dropping the sign and flipping a western
- * longitude to positive. Normalize every dash variant to "-" first. */
-function afNorm(s){ return String(s == null ? "" : s).replace(/[‐-―−‒﹘﹣－]/g, "-"); }
+/* Coordinate parsing is the fiddly part. Maps and iOS emit the sign in ways
+ * a naive parser mangles: a non-ASCII minus (U+2212 −, en/em/figure dashes,
+ * fullwidth −), a space between the minus and the number ("− 58.2"), or a
+ * hemisphere LETTER instead of a sign ("58.2° W"). Any of these silently
+ * flips a western longitude positive → the spot lands ~8000 km away.
+ * afCoords() handles all of them. */
+function afNorm(s){ return String(s == null ? "" : s).replace(/[‐-―−﹘﹣－]/g, "-"); }
+function afCoords(raw){
+  // drop degree/min/sec ornaments; glue a spaced minus back to its number
+  var s=afNorm(raw).replace(/[°º'"′″]/g," ").replace(/-\s+/g,"-");
+  // optional leading hemisphere, signed number, optional trailing hemisphere
+  // (trailing letter only counts if NOT immediately followed by a digit, so a
+  //  leading letter of the NEXT coordinate isn't stolen — "N49 W58")
+  var re=/([NSEWnsew])?\s*(-?\d+(?:\.\d+)?)(?:\s*([NSEWnsew])(?![0-9]))?/g, m, out=[];
+  while((m=re.exec(s))){
+    if(!m[2])continue;
+    var v=parseFloat(m[2]), h=((m[1]||"")+(m[3]||"")).toUpperCase();
+    if(h.indexOf("S")>=0||h.indexOf("W")>=0)v=-Math.abs(v);
+    else if(h.indexOf("N")>=0||h.indexOf("E")>=0)v=Math.abs(v);
+    out.push(v);
+    if(out.length>=2)break;
+  }
+  return out;
+}
+// One coordinate from a single field, honoring sign/hemisphere; "" if none.
+function afOne(s){ var c=afCoords(s); return c.length?String(c[0]):String(s==null?"":s).trim(); }
 
 /* Smart-paste: pasting a "lat, lng" pair (as Maps' "copy coordinates" gives —
- * signs included) into either coordinate box fills both, sidestepping mobile
- * keypads that have no minus key. Single values are left alone. */
+ * signs and hemisphere letters included) into either box fills both,
+ * sidestepping mobile keypads that have no minus key. Singles are left alone. */
 function afSplitPair(ev){
-  var nums=afNorm(ev.target.value).match(/-?\d+(?:\.\d+)?/g);
-  if(nums&&nums.length>=2){
-    document.getElementById("af-lat").value=nums[0];
-    document.getElementById("af-lng").value=nums[1];
+  var c=afCoords(ev.target.value);
+  if(c.length>=2){
+    document.getElementById("af-lat").value=String(c[0]);
+    document.getElementById("af-lng").value=String(c[1]);
     afMsg("");
   }
 }
@@ -505,8 +549,8 @@ document.getElementById("af-lat").addEventListener("input",afSplitPair);
 document.getElementById("af-lng").addEventListener("input",afSplitPair);
 function afSave(){
   var input={name:document.getElementById("af-name").value,
-             lat:afNorm(document.getElementById("af-lat").value).trim(),
-             lng:afNorm(document.getElementById("af-lng").value).trim(),
+             lat:afOne(document.getElementById("af-lat").value),
+             lng:afOne(document.getElementById("af-lng").value),
              note:document.getElementById("af-note").value};
   var v=validateLocation(input);
   if(!v.ok){afMsg(v.errors[0],"err");return;}
