@@ -484,12 +484,17 @@ document.getElementById("add-spot").addEventListener("click",function(){afToggle
 document.getElementById("af-cancel").addEventListener("click",function(){afToggle(false);});
 function afReset(){["af-name","af-lat","af-lng","af-note"].forEach(function(id){document.getElementById(id).value="";});}
 
+/* Maps and iOS often use a non-ASCII minus (U+2212 −, en/em/figure dashes,
+ * fullwidth −) instead of the ASCII hyphen. Number() reads those as NaN and
+ * a plain \-? regex misses them — dropping the sign and flipping a western
+ * longitude to positive. Normalize every dash variant to "-" first. */
+function afNorm(s){ return String(s == null ? "" : s).replace(/[‐-―−‒﹘﹣－]/g, "-"); }
+
 /* Smart-paste: pasting a "lat, lng" pair (as Maps' "copy coordinates" gives —
  * signs included) into either coordinate box fills both, sidestepping mobile
  * keypads that have no minus key. Single values are left alone. */
 function afSplitPair(ev){
-  var v=ev.target.value;
-  var nums=v.match(/-?\d+(?:\.\d+)?/g);
+  var nums=afNorm(ev.target.value).match(/-?\d+(?:\.\d+)?/g);
   if(nums&&nums.length>=2){
     document.getElementById("af-lat").value=nums[0];
     document.getElementById("af-lng").value=nums[1];
@@ -500,23 +505,24 @@ document.getElementById("af-lat").addEventListener("input",afSplitPair);
 document.getElementById("af-lng").addEventListener("input",afSplitPair);
 function afSave(){
   var input={name:document.getElementById("af-name").value,
-             lat:document.getElementById("af-lat").value.trim(),
-             lng:document.getElementById("af-lng").value.trim(),
+             lat:afNorm(document.getElementById("af-lat").value).trim(),
+             lng:afNorm(document.getElementById("af-lng").value).trim(),
              note:document.getElementById("af-note").value};
   var v=validateLocation(input);
   if(!v.ok){afMsg(v.errors[0],"err");return;}
   var added=loadAdded();
   var taken=LOCATIONS.map(function(l){return l.slug;}).concat(added.map(function(s){return s.slug;}));
   var spot={slug:uniqueSlug(slugify(v.value.name),taken),name:v.value.name,lat:v.value.lat,lng:v.value.lng,note:v.value.note,added:true};
-  // soft fat-finger warning — far from home, but don't block (astronomy works anywhere)
-  var far=haversine(CB.lat,CB.lng,spot.lat,spot.lng)>800;
+  // echo the interpreted coords + distance so a wrong sign is obvious at a glance
+  var km=Math.round(haversine(CB.lat,CB.lng,spot.lat,spot.lng));
+  var far=km>800;
   if(!saveAdded(added.concat([spot]))){
     afMsg("Couldn't save — this browser is blocking storage (private mode?).","err");return;
   }
-  afMsg("Added "+spot.name+(far?" — note: that's >800 km from Corner Brook, check the coordinates.":"")+" · fetching…","ok");
+  afMsg("Added "+spot.name+" ("+spot.lat+", "+spot.lng+" · "+km+" km"+(far?" — that looks far, check the sign on the longitude":"")+") · fetching…", far?"err":"ok");
   afReset();
   load();                 // re-fetch + re-score with the new spot included
-  setTimeout(function(){afToggle(false);},far?2600:900);
+  setTimeout(function(){afToggle(false);},far?3600:1100);
 }
 document.getElementById("af-save").addEventListener("click",afSave);
 addForm.addEventListener("keydown",function(ev){
